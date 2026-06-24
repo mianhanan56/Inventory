@@ -9,6 +9,7 @@ import Suppliers from './components/suppliers/Suppliers';
 import Customers from './components/customers/Customers';
 import Sales from './components/sales/Sales';
 import Invoices from './components/invoices/Invoices';
+import Payment from './components/payment/Payment';
 import { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -52,6 +53,7 @@ function AppRoutes() {
         <Route path="customers" element={<Customers />} />
         <Route path="sales" element={<Sales />} />
         <Route path="invoices" element={<Invoices />} />
+        <Route path="payment" element={<Payment />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

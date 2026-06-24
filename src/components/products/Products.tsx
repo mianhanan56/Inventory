@@ -6,7 +6,7 @@ import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
 import {
   Plus, Search, Edit2, Trash2, Package,
-  Barcode, AlertTriangle,
+  Barcode, AlertTriangle, ShoppingCart,
 } from 'lucide-react';
 
 export default function Products() {
@@ -19,12 +19,16 @@ export default function Products() {
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModal, setDeleteModal] = useState<Product | null>(null);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [saleProduct, setSaleProduct] = useState<Product | null>(null);
+  const [saleQty, setSaleQty] = useState('');
+  const [saleError, setSaleError] = useState('');
+  const [selling, setSelling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     name: '', sku: '', barcode: '', description: '', category_id: '',
-    supplier_id: '', cost_price: '', selling_price: '', current_stock: '0',
+    supplier_id: '', cost_price: '', selling_price: '', total_stock: '0',
     min_stock_level: '5', max_stock_level: '', unit: 'each', vat_rate: '15',
     is_active: true,
   });
@@ -33,12 +37,24 @@ export default function Products() {
 
   async function loadData() {
     setLoading(true);
-    const [prodRes, catRes, supRes] = await Promise.all([
+    const [prodRes, catRes, supRes, moveRes] = await Promise.all([
       supabase.from('products').select('*, category:categories(*), supplier:suppliers(*)').eq('is_active', true).order('name'),
       supabase.from('categories').select('*').order('name'),
       supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
+      supabase.from('stock_movements').select('product_id, quantity').eq('type', 'out'),
     ]);
-    setProducts(prodRes.data || []);
+
+    // Derive each product's original Total Stock = remaining current_stock + everything sold.
+    const soldByProduct = new Map<string, number>();
+    (moveRes.data || []).forEach((m: { product_id: string; quantity: number }) => {
+      soldByProduct.set(m.product_id, (soldByProduct.get(m.product_id) || 0) + m.quantity);
+    });
+    const products = (prodRes.data || []).map((p: Product) => ({
+      ...p,
+      total_stock: p.current_stock + (soldByProduct.get(p.id) || 0),
+    }));
+
+    setProducts(products);
     setCategories(catRes.data || []);
     setSuppliers(supRes.data || []);
     setLoading(false);
@@ -48,7 +64,7 @@ export default function Products() {
     setEditProduct(null);
     setForm({
       name: '', sku: '', barcode: '', description: '', category_id: '',
-      supplier_id: '', cost_price: '', selling_price: '', current_stock: '0',
+      supplier_id: '', cost_price: '', selling_price: '', total_stock: '0',
       min_stock_level: '5', max_stock_level: '', unit: 'each', vat_rate: '15',
       is_active: true,
     });
@@ -66,7 +82,7 @@ export default function Products() {
       supplier_id: product.supplier_id || '',
       cost_price: String(product.cost_price),
       selling_price: String(product.selling_price),
-      current_stock: String(product.current_stock),
+      total_stock: String(product.total_stock ?? product.current_stock),
       min_stock_level: String(product.min_stock_level),
       max_stock_level: product.max_stock_level ? String(product.max_stock_level) : '',
       unit: product.unit,
@@ -79,6 +95,7 @@ export default function Products() {
   async function handleSave() {
     setSaving(true);
     try {
+      const totalStock = Number(form.total_stock);
       const data = {
         name: form.name,
         sku: form.sku,
@@ -88,7 +105,6 @@ export default function Products() {
         supplier_id: form.supplier_id || null,
         cost_price: Number(form.cost_price),
         selling_price: Number(form.selling_price),
-        current_stock: Number(form.current_stock),
         min_stock_level: Number(form.min_stock_level),
         max_stock_level: form.max_stock_level ? Number(form.max_stock_level) : null,
         unit: form.unit,
@@ -97,9 +113,15 @@ export default function Products() {
       };
 
       if (editProduct) {
-        await supabase.from('products').update(data).eq('id', editProduct.id);
+        // Total Stock is derived (current + sold). Keep the already-sold quantity
+        // intact: new current_stock = new total minus what was already sold.
+        const sold = (editProduct.total_stock ?? editProduct.current_stock) - editProduct.current_stock;
+        await supabase.from('products')
+          .update({ ...data, current_stock: totalStock - sold })
+          .eq('id', editProduct.id);
       } else {
-        await supabase.from('products').insert(data);
+        // New product: nothing sold yet, so current stock starts at the total.
+        await supabase.from('products').insert({ ...data, current_stock: totalStock });
       }
       setModalOpen(false);
       loadData();
@@ -112,6 +134,46 @@ export default function Products() {
     await supabase.from('products').update({ is_active: false }).eq('id', product.id);
     setDeleteModal(null);
     loadData();
+  }
+
+  function openSale(product: Product) {
+    setSaleProduct(product);
+    setSaleQty('');
+    setSaleError('');
+  }
+
+  async function handleSale() {
+    if (!saleProduct) return;
+    const qty = Number(saleQty);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      setSaleError('Enter a valid quantity greater than zero.');
+      return;
+    }
+    if (qty > saleProduct.current_stock) {
+      setSaleError(`Cannot sell ${qty} — only ${saleProduct.current_stock} ${saleProduct.unit} in stock.`);
+      return;
+    }
+    setSelling(true);
+    setSaleError('');
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      // Record an 'out' stock movement; a DB trigger deducts current_stock automatically.
+      const { error } = await supabase.from('stock_movements').insert({
+        product_id: saleProduct.id,
+        type: 'out',
+        quantity: qty,
+        notes: 'Sale Stock',
+        created_by: user?.id,
+      });
+      if (error) throw error;
+      setSaleProduct(null);
+      loadData();
+    } catch (err) {
+      console.error('Sale stock error:', err);
+      setSaleError('Failed to record sale. Please try again.');
+    } finally {
+      setSelling(false);
+    }
   }
 
   const filtered = products.filter(p => {
@@ -185,17 +247,18 @@ export default function Products() {
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Category</th>
                 <th className="text-right py-3 px-4 text-navy-400 font-medium">Cost</th>
                 <th className="text-right py-3 px-4 text-navy-400 font-medium">Price</th>
-                <th className="text-right py-3 px-4 text-navy-400 font-medium">Stock</th>
+                <th className="text-right py-3 px-4 text-navy-400 font-medium">Total Stock</th>
+                <th className="text-right py-3 px-4 text-navy-400 font-medium">Current Stock</th>
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Status</th>
                 <th className="text-right py-3 px-4 text-navy-400 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} className="text-center py-12 text-navy-400"><div className="animate-spin w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full mx-auto" /></td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-navy-400"><div className="animate-spin w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full mx-auto" /></td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-12 text-navy-400">No products found</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-navy-400">No products found</td></tr>
               )}
               {filtered.map((product) => (
                 <tr key={product.id} className="border-b border-navy-700/30 hover:bg-navy-700/20 transition">
@@ -217,6 +280,10 @@ export default function Products() {
                   <td className="py-3 px-4 text-navy-300 text-right">{fmt(product.cost_price)}</td>
                   <td className="py-3 px-4 text-white font-medium text-right">{fmt(product.selling_price)}</td>
                   <td className="py-3 px-4 text-right">
+                    <span className="text-navy-300">{product.total_stock ?? product.current_stock}</span>
+                    <span className="text-navy-400 text-xs"> {product.unit}</span>
+                  </td>
+                  <td className="py-3 px-4 text-right">
                     <span className={product.current_stock <= product.min_stock_level ? 'text-red-400 font-semibold' : 'text-white'}>
                       {product.current_stock}
                     </span>
@@ -231,6 +298,14 @@ export default function Products() {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openSale(product)}
+                        disabled={product.current_stock <= 0}
+                        title={product.current_stock <= 0 ? 'Out of stock' : 'Sale Stock'}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      >
+                        <ShoppingCart className="w-4 h-4" /> Sale Stock
+                      </button>
                       <button onClick={() => openEdit(product)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition">
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -288,8 +363,8 @@ export default function Products() {
             <input type="number" step="0.01" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
           </div>
           <div>
-            <label className="block text-navy-300 text-sm mb-1">Current Stock</label>
-            <input type="number" value={form.current_stock} onChange={(e) => setForm({ ...form, current_stock: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <label className="block text-navy-300 text-sm mb-1">Total Stock</label>
+            <input type="number" value={form.total_stock} onChange={(e) => setForm({ ...form, total_stock: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Min Stock Level</label>
@@ -335,6 +410,48 @@ export default function Products() {
             Delete
           </button>
         </div>
+      </Modal>
+
+      {/* Sale Stock Modal */}
+      <Modal isOpen={!!saleProduct} onClose={() => setSaleProduct(null)} title="Sale Stock" size="sm">
+        {saleProduct && (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center shrink-0">
+                <ShoppingCart className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-white font-medium">{saleProduct.name}</p>
+                <p className="text-navy-400 text-sm">
+                  Available: <span className="text-white font-medium">{saleProduct.current_stock}</span> {saleProduct.unit}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <label className="block text-navy-300 text-sm mb-1">Quantity to Sell *</label>
+              <input
+                type="number"
+                min="1"
+                max={saleProduct.current_stock}
+                step="1"
+                value={saleQty}
+                onChange={(e) => { setSaleQty(e.target.value); setSaleError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !selling) handleSale(); }}
+                autoFocus
+                className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50"
+              />
+              {saleError && <p className="text-red-400 text-sm mt-2">{saleError}</p>}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
+              <button onClick={() => setSaleProduct(null)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
+              <button onClick={handleSale} disabled={selling || !saleQty} className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl text-sm transition disabled:opacity-50">
+                {selling ? 'Processing...' : 'Confirm Sale'}
+              </button>
+            </div>
+          </>
+        )}
       </Modal>
     </div>
   );

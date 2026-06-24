@@ -42,6 +42,7 @@ export interface Product {
   supplier_id?: string;
   cost_price: number;
   selling_price: number;
+  total_stock?: number; // derived: current_stock + total sold (not a stored column)
   current_stock: number;
   min_stock_level: number;
   max_stock_level?: number;

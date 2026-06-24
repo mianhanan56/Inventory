@@ -9,6 +9,7 @@ import {
   Users,
   ShoppingCart,
   FileText,
+  CreditCard,
   LogOut,
   Menu,
   X,
@@ -23,6 +24,7 @@ const navItems = [
   { to: '/customers', icon: Users, label: 'Customers' },
   { to: '/sales', icon: ShoppingCart, label: 'Sales & POS' },
   { to: '/invoices', icon: FileText, label: 'Invoices' },
+  { to: '/payment', icon: CreditCard, label: 'Payment' },
 ];
 
 export default function Sidebar() {
