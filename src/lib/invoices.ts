@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { Sale, SaleItem } from '../types';
+import { LOGO_DATA_URI } from './logo';
 
 export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   const customer = sale.customer;
@@ -16,6 +17,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; background: #fff; }
     .invoice { max-width: 800px; margin: 0 auto; padding: 40px; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 3px solid #d4a017; padding-bottom: 20px; }
+    .company-info .logo { height: 80px; width: auto; margin-bottom: 12px; display: block; }
     .company-info h1 { color: #0d1240; font-size: 28px; font-weight: 700; }
     .company-info p { color: #6b7280; font-size: 13px; margin-top: 4px; }
     .invoice-badge { background: #0d1240; color: #d4a017; padding: 12px 24px; border-radius: 8px; text-align: right; }
@@ -46,6 +48,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   <div class="invoice">
     <div class="header">
       <div class="company-info">
+        <img class="logo" src="${LOGO_DATA_URI}" alt="ON TARGET UNITED logo" />
         <h1>ON TARGET UNITED</h1>
         <p>VAT Registration: 4123456789</p>
         <p>123 Business Park, Sandton, Gauteng, 2196</p>
