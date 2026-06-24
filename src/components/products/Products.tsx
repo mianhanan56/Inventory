@@ -250,15 +250,16 @@ export default function Products() {
                 <th className="text-right py-3 px-4 text-navy-400 font-medium">Total Stock</th>
                 <th className="text-right py-3 px-4 text-navy-400 font-medium">Current Stock</th>
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Status</th>
+                <th className="text-left py-3 px-4 text-navy-400 font-medium">Created</th>
                 <th className="text-right py-3 px-4 text-navy-400 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={9} className="text-center py-12 text-navy-400"><div className="animate-spin w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full mx-auto" /></td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-navy-400"><div className="animate-spin w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full mx-auto" /></td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={9} className="text-center py-12 text-navy-400">No products found</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-navy-400">No products found</td></tr>
               )}
               {filtered.map((product) => (
                 <tr key={product.id} className="border-b border-navy-700/30 hover:bg-navy-700/20 transition">
@@ -295,6 +296,12 @@ export default function Products() {
                     ) : (
                       <StatusBadge status="In Stock" variant="success" />
                     )}
+                  </td>
+                  <td className="py-3 px-4 text-navy-300 text-xs whitespace-nowrap">
+                    {new Date(product.created_at).toLocaleString('en-ZA', {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-2">
