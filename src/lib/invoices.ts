@@ -38,6 +38,9 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     .totals .row.total { font-size: 20px; font-weight: 700; color: #0d1240; border-top: 2px solid #d4a017; padding-top: 12px; margin-top: 8px; }
     .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; }
     .footer p { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .returns-policy { margin-top: 24px; text-align: center; }
+    .returns-policy p { font-size: 12px; font-weight: 600; color: #0d1240; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.6; }
+    .returns-policy .thanks { margin-top: 8px; font-weight: 700; text-transform: none; color: #d4a017; }
     .vat-note { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-top: 20px; font-size: 12px; color: #166534; }
     .print-btn { position: fixed; bottom: 20px; right: 20px; background: #0d1240; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
     .print-btn:hover { background: #1a237e; }
@@ -50,9 +53,8 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       <div class="company-info">
         <img class="logo" src="${LOGO_DATA_URI}" alt="ON TARGET UNITED logo" />
         <h1>ON TARGET UNITED</h1>
-        <p>VAT Registration: 4123456789</p>
-        <p>123 Business Park, Sandton, Gauteng, 2196</p>
-        <p>Tel: +27 11 123 4567 | info@ontargetunited.co.za</p>
+        <p>BLOCK C CHINA MALL, SPRINGFIELD, DURBAN</p>
+        <p>Tel: 078 863 8987 | 067 606 1458</p>
       </div>
       <div class="invoice-badge">
         <h2>TAX INVOICE</h2>
@@ -65,10 +67,10 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       <div class="party">
         <h3>Bill From</h3>
         <p><strong>ON TARGET UNITED</strong></p>
-        <p>123 Business Park</p>
-        <p>Sandton, Gauteng, 2196</p>
+        <p>Block C China Mall</p>
+        <p>Springfield, Durban</p>
         <p>South Africa</p>
-        <p>VAT No: 4123456789</p>
+        <p>Tel: 078 863 8987 / 067 606 1458</p>
       </div>
       <div class="party">
         <h3>Bill To</h3>
@@ -120,9 +122,13 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     </div>
 
     <div class="footer">
-      <p><strong>ON TARGET UNITED</strong> | VAT Reg: 4123456789</p>
-      <p>Payment Method: ${sale.payment_method.toUpperCase()} | Thank you for your business!</p>
-      <p>Bank: FNB | Account: 62789012345 | Branch: 250655</p>
+      <p><strong>ON TARGET UNITED</strong> | Block C China Mall, Springfield, Durban</p>
+      <p>Payment Method: ${sale.payment_method.toUpperCase()} | Tel: 078 863 8987 / 067 606 1458</p>
+    </div>
+
+    <div class="returns-policy">
+      <p>NO RETURN, NO REFUND. EXCHANGE ONLY IN 7 DAYS WITH VALID PROOF OF PURCHASE.<br>ITEM SHOULD BE ORIGINAL PACKING &amp; RESALABLE</p>
+      <p class="thanks">Thanks for shopping with us!</p>
     </div>
   </div>
 
