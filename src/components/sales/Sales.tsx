@@ -74,29 +74,59 @@ export default function Sales() {
 
   const total = subtotal + vatTotal - discount;
 
+  // Generate the next invoice number as INV-YYYYMM-NNNN by reading the highest
+  // existing number for the current month and incrementing it. This replaces the
+  // DB generate_invoice_number() function, which parsed the sequence from the
+  // wrong character offset and always returned 0001 (causing duplicate-key errors).
+  async function nextInvoiceNumber(): Promise<string> {
+    const now = new Date();
+    const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prefix = `INV-${datePart}-`;
+    const { data } = await supabase
+      .from('sales')
+      .select('invoice_number')
+      .like('invoice_number', `${prefix}%`)
+      .order('invoice_number', { ascending: false })
+      .limit(1);
+    let seq = 1;
+    if (data && data.length > 0) {
+      const lastSeq = parseInt(String(data[0].invoice_number).slice(prefix.length), 10);
+      if (!Number.isNaN(lastSeq)) seq = lastSeq + 1;
+    }
+    return `${prefix}${String(seq).padStart(4, '0')}`;
+  }
+
   async function completeSale() {
     if (cart.length === 0) return;
     setSaving(true);
     try {
       const user = (await supabase.auth.getUser()).data.user;
-      const invNumRes = await supabase.rpc('generate_invoice_number');
-      const invoiceNumber = invNumRes.data as unknown as string;
 
-      const saleData = {
-        invoice_number: invoiceNumber,
-        customer_id: selectedCustomer || null,
-        subtotal,
-        vat_total: vatTotal,
-        discount_total: discount,
-        total,
-        payment_method: paymentMethod,
-        status: 'completed' as const,
-        notes: notes || null,
-        created_by: user?.id,
-      };
-
-      const { data: saleResult, error: saleError } = await supabase.from('sales').insert(saleData).select().single();
-      if (saleError) throw saleError;
+      // Insert the sale, generating the invoice number on the client. We retry on
+      // a unique-constraint collision (code 23505) so concurrent sales — or a stale
+      // sequence — resolve to the next free number instead of failing the sale.
+      let saleResult: { id: string } | null = null;
+      let invoiceNumber = '';
+      for (let attempt = 0; attempt < 5; attempt++) {
+        invoiceNumber = await nextInvoiceNumber();
+        const saleData = {
+          invoice_number: invoiceNumber,
+          customer_id: selectedCustomer || null,
+          subtotal,
+          vat_total: vatTotal,
+          discount_total: discount,
+          total,
+          payment_method: paymentMethod,
+          status: 'completed' as const,
+          notes: notes || null,
+          created_by: user?.id,
+        };
+        const { data, error: saleError } = await supabase.from('sales').insert(saleData).select().single();
+        if (!saleError) { saleResult = data; break; }
+        if (saleError.code === '23505' && attempt < 4) continue;
+        throw saleError;
+      }
+      if (!saleResult) throw new Error('Could not generate a unique invoice number. Please try again.');
 
       const saleItems = cart.map(item => ({
         sale_id: saleResult.id,
@@ -109,9 +139,10 @@ export default function Sales() {
         line_total: (item.product.selling_price * item.quantity) - item.discount,
       }));
 
-      await supabase.from('sale_items').insert(saleItems);
+      const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
+      if (itemsError) throw itemsError;
 
-      // Create stock out movements for each item
+      // Create stock out movements for each item (audit trail)
       const stockMovements = cart.map(item => ({
         product_id: item.product.id,
         type: 'out' as const,
@@ -120,7 +151,23 @@ export default function Sales() {
         notes: `Sale: ${invoiceNumber}`,
         created_by: user?.id,
       }));
-      await supabase.from('stock_movements').insert(stockMovements);
+      const { error: movementsError } = await supabase.from('stock_movements').insert(stockMovements);
+      if (movementsError) throw movementsError;
+
+      // Deduct sold quantity from each product's stock. We set an absolute
+      // target value (loaded stock - qty sold) rather than a relative decrement,
+      // so the result is correct and idempotent whether or not a DB trigger also
+      // adjusts stock on the movement insert (no risk of double-deduction).
+      const stockUpdates = await Promise.all(
+        cart.map(item =>
+          supabase
+            .from('products')
+            .update({ current_stock: Math.max(0, item.product.current_stock - item.quantity) })
+            .eq('id', item.product.id)
+        )
+      );
+      const stockUpdateError = stockUpdates.find(res => res.error)?.error;
+      if (stockUpdateError) throw stockUpdateError;
 
       // Reset
       setCart([]);
@@ -130,6 +177,15 @@ export default function Sales() {
       loadData();
     } catch (err) {
       console.error('Sale error:', err);
+      const e = err as { message?: string; code?: string; details?: string; hint?: string } | null;
+      const parts = [
+        e?.message,
+        e?.code ? `code: ${e.code}` : null,
+        e?.details ? `details: ${e.details}` : null,
+        e?.hint ? `hint: ${e.hint}` : null,
+      ].filter(Boolean);
+      const msg = parts.length ? parts.join('\n') : (err instanceof Error ? err.message : JSON.stringify(err));
+      alert(`Sale could not be completed:\n${msg || 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
