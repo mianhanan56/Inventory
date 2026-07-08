@@ -1,11 +1,8 @@
-import { format } from 'date-fns';
 import { Sale, SaleItem } from '../types';
 import { LOGO_DATA_URI } from './logo';
 
 export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
-  const customer = sale.customer;
   const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const date = format(new Date(sale.created_at), 'dd MMMM yyyy');
 
   return `<!DOCTYPE html>
 <html>
@@ -14,36 +11,34 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   <title>Invoice ${sale.invoice_number}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; background: #fff; }
-    .invoice { max-width: 800px; margin: 0 auto; padding: 40px; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 3px solid #d4a017; padding-bottom: 20px; }
-    .company-info .logo { height: 80px; width: auto; margin-bottom: 12px; display: block; }
-    .company-info h1 { color: #0d1240; font-size: 28px; font-weight: 700; }
-    .company-info p { color: #6b7280; font-size: 13px; margin-top: 4px; }
-    .invoice-badge { background: #0d1240; color: #d4a017; padding: 12px 24px; border-radius: 8px; text-align: right; }
-    .invoice-badge h2 { font-size: 20px; font-weight: 700; }
-    .invoice-badge p { font-size: 12px; color: #9fa8da; margin-top: 2px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; }
+    .invoice { max-width: 800px; margin: 0 auto; padding: 20px 2px 2px; }
+    .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+    .company-info .logo { height: 80px; width: auto; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto; }
+    .company-info h1 { color: #000; font-size: 28px; font-weight: 700; }
+    .company-info p { color: #000; font-size: 13px; margin-top: 4px; }
+    .invoice-meta { text-align: right; }
+    .invoice-meta p { font-size: 13px; color: #000; margin-top: 2px; }
     .parties { display: flex; justify-content: space-between; margin-bottom: 30px; gap: 40px; }
     .party { flex: 1; }
-    .party h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; margin-bottom: 8px; }
-    .party p { font-size: 14px; color: #1a1a2e; margin-bottom: 2px; }
+    .party h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #000; margin-bottom: 8px; }
+    .party p { font-size: 14px; color: #000; margin-bottom: 2px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    thead th { background: #0d1240; color: white; padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    thead th { background: #fff; color: #000; padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #000; }
     thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
-    tbody td { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+    tbody td { padding: 12px 16px; border-bottom: 1px solid #000; font-size: 14px; }
     tbody td:last-child, tbody td:nth-child(n+3) { text-align: right; }
-    tbody tr:nth-child(even) { background: #f9fafb; }
     .totals { margin-left: auto; width: 300px; }
-    .totals .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; color: #374151; }
-    .totals .row.total { font-size: 20px; font-weight: 700; color: #0d1240; border-top: 2px solid #d4a017; padding-top: 12px; margin-top: 8px; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; }
-    .footer p { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .totals .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; color: #000; }
+    .totals .row.total { font-size: 20px; font-weight: 700; color: #000; border-top: 2px solid #000; padding-top: 12px; margin-top: 8px; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #000; text-align: center; }
+    .footer p { font-size: 12px; color: #000; margin-bottom: 4px; }
     .returns-policy { margin-top: 24px; text-align: center; }
-    .returns-policy p { font-size: 12px; font-weight: 600; color: #0d1240; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.6; }
-    .returns-policy .thanks { margin-top: 8px; font-weight: 700; text-transform: none; color: #d4a017; }
-    .vat-note { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-top: 20px; font-size: 12px; color: #166534; }
-    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #0d1240; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
-    .print-btn:hover { background: #1a237e; }
+    .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.6; }
+    .returns-policy .thanks { margin-top: 8px; font-weight: 700; text-transform: none; color: #000; }
+    .vat-note { background: #fff; border: 1px solid #000; border-radius: 8px; padding: 12px 16px; margin-top: 20px; font-size: 12px; color: #000; }
+    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
+    .print-btn:hover { background: #333; }
     @media print { .print-btn { display: none; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
@@ -55,35 +50,6 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
         <h1>ON TARGET UNITED</h1>
         <p>BLOCK C CHINA MALL, SPRINGFIELD, DURBAN</p>
         <p>Tel: 078 863 8987 | 067 606 1458</p>
-      </div>
-      <div class="invoice-badge">
-        <h2>TAX INVOICE</h2>
-        <p>${sale.invoice_number}</p>
-        <p>${date}</p>
-      </div>
-    </div>
-
-    <div class="parties">
-      <div class="party">
-        <h3>Bill From</h3>
-        <p><strong>ON TARGET UNITED</strong></p>
-        <p>Block C China Mall</p>
-        <p>Springfield, Durban</p>
-        <p>South Africa</p>
-        <p>Tel: 078 863 8987 / 067 606 1458</p>
-      </div>
-      <div class="party">
-        <h3>Bill To</h3>
-        ${customer ? `
-          <p><strong>${customer.name}</strong></p>
-          ${customer.address ? `<p>${customer.address}</p>` : ''}
-          ${customer.city || customer.province ? `<p>${[customer.city, customer.province].filter(Boolean).join(', ')}</p>` : ''}
-          <p>South Africa</p>
-          ${customer.vat_number ? `<p>VAT No: ${customer.vat_number}</p>` : ''}
-        ` : `
-          <p><strong>Walk-in Customer</strong></p>
-          <p>Cash Sale</p>
-        `}
       </div>
     </div>
 
@@ -115,15 +81,6 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       <div class="row"><span>VAT</span><span>${fmt(Number(sale.vat_total))}</span></div>
       ${Number(sale.discount_total) > 0 ? `<div class="row"><span>Discount</span><span>-${fmt(Number(sale.discount_total))}</span></div>` : ''}
       <div class="row total"><span>Total</span><span>${fmt(Number(sale.total))}</span></div>
-    </div>
-
-    <div class="vat-note">
-      Tax Invoice as per Section 54 of the Value-Added Tax Act, No. 89 of 1991. VAT included where applicable at 15%.
-    </div>
-
-    <div class="footer">
-      <p><strong>ON TARGET UNITED</strong> | Block C China Mall, Springfield, Durban</p>
-      <p>Payment Method: ${sale.payment_method.toUpperCase()} | Tel: 078 863 8987 / 067 606 1458</p>
     </div>
 
     <div class="returns-policy">
