@@ -11,35 +11,39 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   <title>Invoice ${sale.invoice_number}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; line-height: 1.2; }
     .invoice { max-width: 800px; margin: 0 auto; padding: 20px 2px 2px; }
-    .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-    .company-info .logo { height: 80px; width: auto; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto; }
-    .company-info h1 { color: #000; font-size: 28px; font-weight: 700; }
-    .company-info p { color: #000; font-size: 13px; margin-top: 4px; }
-    .invoice-meta { text-align: right; }
-    .invoice-meta p { font-size: 13px; color: #000; margin-top: 2px; }
-    .parties { display: flex; justify-content: space-between; margin-bottom: 30px; gap: 40px; }
-    .party { flex: 1; }
-    .party h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #000; margin-bottom: 8px; }
-    .party p { font-size: 14px; color: #000; margin-bottom: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    thead th { background: #fff; color: #000; padding: 12px 16px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #000; }
+    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+    .company-info .logo { height: 60px; width: auto; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
+    .company-info h1 { color: #000; font-size: 24px; font-weight: 700; }
+    .company-info p { color: #000; font-size: 13px; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
+    thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
     thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
-    tbody td { padding: 12px 16px; border-bottom: 1px solid #000; font-size: 14px; }
+    tbody td { padding: 4px 2px; border-bottom: 1px solid #000; font-size: 11px; word-wrap: break-word; overflow-wrap: break-word; }
     tbody td:last-child, tbody td:nth-child(n+3) { text-align: right; }
-    .totals { margin-left: auto; width: 300px; }
-    .totals .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; color: #000; }
-    .totals .row.total { font-size: 20px; font-weight: 700; color: #000; border-top: 2px solid #000; padding-top: 12px; margin-top: 8px; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #000; text-align: center; }
-    .footer p { font-size: 12px; color: #000; margin-bottom: 4px; }
-    .returns-policy { margin-top: 24px; text-align: center; }
-    .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.6; }
-    .returns-policy .thanks { margin-top: 8px; font-weight: 700; text-transform: none; color: #000; }
-    .vat-note { background: #fff; border: 1px solid #000; border-radius: 8px; padding: 12px 16px; margin-top: 20px; font-size: 12px; color: #000; }
+    th:nth-child(1), td:nth-child(1) { width: 32%; }
+    th:nth-child(2), td:nth-child(2) { width: 9%; }
+    th:nth-child(3), td:nth-child(3) { width: 24%; }
+    th:nth-child(4), td:nth-child(4) { width: 14%; }
+    th:nth-child(5), td:nth-child(5) { width: 21%; }
+    .totals { margin-left: auto; width: 100%; }
+    .totals .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; color: #000; }
+    .totals .row.total { font-size: 16px; font-weight: 700; color: #000; border-top: 2px solid #000; padding-top: 4px; margin-top: 3px; }
+    .returns-policy { margin-top: 10px; text-align: center; }
+    .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
+    .returns-policy .thanks { margin-top: 4px; font-weight: 700; text-transform: none; color: #000; }
     .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
     .print-btn:hover { background: #333; }
-    @media print { .print-btn { display: none; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @media print {
+      @page { size: 80mm auto; margin: 0; }
+      html, body { width: 80mm; margin: 0; padding: 0; }
+      .print-btn { display: none; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      /* 80mm roll: printable area is ~72mm, ~4mm non-printable each side.
+         Content is 72mm centred so nothing is clipped on the right edge. */
+      .invoice { width: 72mm; max-width: none; margin: 0 auto; padding: 4mm 0 3mm; }
+    }
   </style>
 </head>
 <body>
