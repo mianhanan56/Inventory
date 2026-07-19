@@ -68,10 +68,10 @@ export default function Inventory() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Inventory</h1>
+          <h1 className="text-2xl font-bold text-black">Inventory</h1>
           <p className="text-navy-400 text-sm mt-1">Track stock movements and adjustments</p>
         </div>
-        <button onClick={() => { setForm({ product_id: '', type: 'in', quantity: '', reference: '', notes: '' }); setModalOpen(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl transition text-sm">
+        <button onClick={() => { setForm({ product_id: '', type: 'in', quantity: '', reference: '', notes: '' }); setModalOpen(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition text-sm">
           <Plus className="w-4 h-4" /> New Movement
         </button>
       </div>
@@ -81,22 +81,22 @@ export default function Inventory() {
         <GlassCard>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
-              <ArrowDown className="w-5 h-5 text-green-400" />
+              <ArrowDown className="w-5 h-5 text-green-600" />
             </div>
             <div>
               <p className="text-navy-400 text-sm">Stock In</p>
-              <p className="text-white font-semibold">{movements.filter(m => m.type === 'in').reduce((s, m) => s + m.quantity, 0)} units</p>
+              <p className="text-black font-semibold">{movements.filter(m => m.type === 'in').reduce((s, m) => s + m.quantity, 0)} units</p>
             </div>
           </div>
         </GlassCard>
         <GlassCard>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
-              <ArrowUp className="w-5 h-5 text-red-400" />
+              <ArrowUp className="w-5 h-5 text-red-600" />
             </div>
             <div>
               <p className="text-navy-400 text-sm">Stock Out</p>
-              <p className="text-white font-semibold">{movements.filter(m => m.type === 'out').reduce((s, m) => s + m.quantity, 0)} units</p>
+              <p className="text-black font-semibold">{movements.filter(m => m.type === 'out').reduce((s, m) => s + m.quantity, 0)} units</p>
             </div>
           </div>
         </GlassCard>
@@ -107,7 +107,7 @@ export default function Inventory() {
             </div>
             <div>
               <p className="text-navy-400 text-sm">Total Products</p>
-              <p className="text-white font-semibold">{products.length} items</p>
+              <p className="text-black font-semibold">{products.length} items</p>
             </div>
           </div>
         </GlassCard>
@@ -118,9 +118,9 @@ export default function Inventory() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400" />
-            <input type="text" placeholder="Search movements..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition" />
+            <input type="text" placeholder="Search movements..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition" />
           </div>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-3 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-3 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
             <option value="">All Types</option>
             <option value="in">Stock In</option>
             <option value="out">Stock Out</option>
@@ -133,7 +133,7 @@ export default function Inventory() {
       {/* Movements Table */}
       <GlassCard padding="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-navy-700/50">
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Product</th>
@@ -157,13 +157,13 @@ export default function Inventory() {
                           <Icon className="w-4 h-4 text-navy-300" />
                         </div>
                         <div>
-                          <p className="text-white font-medium">{m.product?.name || 'Unknown'}</p>
+                          <p className="text-black font-medium">{m.product?.name || 'Unknown'}</p>
                           <p className="text-navy-400 text-xs">{m.product?.sku}</p>
                         </div>
                       </div>
                     </td>
                     <td className="py-3 px-4"><StatusBadge status={m.type.toUpperCase()} variant={typeVariants[m.type]} /></td>
-                    <td className="py-3 px-4 text-right text-white font-medium">{m.type === 'adjustment' ? `→ ${m.quantity}` : m.type === 'in' ? `+${m.quantity}` : `-${m.quantity}`}</td>
+                    <td className="py-3 px-4 text-right text-black font-medium">{m.type === 'adjustment' ? `→ ${m.quantity}` : m.type === 'in' ? `+${m.quantity}` : `-${m.quantity}`}</td>
                     <td className="py-3 px-4 text-navy-300">{m.reference || '-'}</td>
                     <td className="py-3 px-4 text-navy-300 max-w-xs truncate">{m.notes || '-'}</td>
                     <td className="py-3 px-4 text-navy-300">{new Date(m.created_at).toLocaleDateString('en-ZA')}</td>
@@ -180,7 +180,7 @@ export default function Inventory() {
         <div className="space-y-4">
           <div>
             <label className="block text-navy-300 text-sm mb-1">Product *</label>
-            <select value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+            <select value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
               <option value="">Select Product</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name} ({p.sku}) - Stock: {p.current_stock}</option>
@@ -190,7 +190,7 @@ export default function Inventory() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-navy-300 text-sm mb-1">Type *</label>
-              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
                 <option value="in">Stock In</option>
                 <option value="out">Stock Out</option>
                 <option value="adjustment">Adjustment</option>
@@ -199,21 +199,21 @@ export default function Inventory() {
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Quantity *</label>
-              <input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+              <input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
             </div>
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Reference</label>
-            <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="PO number, GRN, etc." className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="PO number, GRN, etc." className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Notes</label>
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-          <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
-          <button onClick={handleSave} disabled={saving || !form.product_id || !form.quantity} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl text-sm transition disabled:opacity-50">
+          <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !form.product_id || !form.quantity} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl text-sm transition disabled:opacity-50">
             {saving ? 'Saving...' : 'Record Movement'}
           </button>
         </div>

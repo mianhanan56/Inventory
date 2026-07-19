@@ -89,10 +89,10 @@ export default function Customers() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Customers</h1>
+          <h1 className="text-2xl font-bold text-black">Customers</h1>
           <p className="text-navy-400 text-sm mt-1">{customers.length} active customers</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl transition text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition text-sm">
           <Plus className="w-4 h-4" /> Add Customer
         </button>
       </div>
@@ -100,7 +100,7 @@ export default function Customers() {
       <GlassCard padding="p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400" />
-          <input type="text" placeholder="Search customers..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition" />
+          <input type="text" placeholder="Search customers..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition" />
         </div>
       </GlassCard>
 
@@ -114,16 +114,16 @@ export default function Customers() {
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-400" />
+                    <Users className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-white font-semibold">{c.name}</h3>
+                    <h3 className="text-black font-semibold">{c.name}</h3>
                     {c.vat_number && <p className="text-navy-400 text-xs">VAT: {c.vat_number}</p>}
                   </div>
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => openEdit(c)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={() => setDeleteModal(c)} className="p-1.5 text-navy-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => setDeleteModal(c)} className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
               <div className="space-y-2 text-sm">
@@ -141,47 +141,47 @@ export default function Customers() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-navy-300 text-sm mb-1">Customer Name *</label>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Email</label>
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Phone</label>
-            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">VAT Number</label>
-            <input value={form.vat_number} onChange={(e) => setForm({ ...form, vat_number: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.vat_number} onChange={(e) => setForm({ ...form, vat_number: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div className="sm:col-span-2">
             <label className="block text-navy-300 text-sm mb-1">Address</label>
-            <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">City</label>
-            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Province</label>
-            <select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+            <select value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
               <option value="">Select Province</option>
               {provinces.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Postal Code</label>
-            <input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div className="sm:col-span-2">
             <label className="block text-navy-300 text-sm mb-1">Notes</label>
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-          <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
-          <button onClick={handleSave} disabled={saving || !form.name} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl text-sm transition disabled:opacity-50">
+          <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !form.name} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl text-sm transition disabled:opacity-50">
             {saving ? 'Saving...' : editCustomer ? 'Update Customer' : 'Add Customer'}
           </button>
         </div>
@@ -189,14 +189,14 @@ export default function Customers() {
 
       <Modal isOpen={!!deleteModal} onClose={() => setDeleteModal(null)} title="Delete Customer" size="sm">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
+          <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5 text-red-600" /></div>
           <div>
-            <p className="text-white">Are you sure you want to delete <strong>{deleteModal?.name}</strong>?</p>
+            <p className="text-black">Are you sure you want to delete <strong>{deleteModal?.name}</strong>?</p>
             <p className="text-navy-400 text-sm mt-1">The customer will be deactivated.</p>
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-          <button onClick={() => setDeleteModal(null)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
+          <button onClick={() => setDeleteModal(null)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
           <button onClick={() => deleteModal && handleDelete(deleteModal)} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl text-sm transition">Delete</button>
         </div>
       </Modal>

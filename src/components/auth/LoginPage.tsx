@@ -37,12 +37,12 @@ export default function LoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gold-500/10 border border-gold-500/20 rounded-2xl mb-4">
               <Package className="w-8 h-8 text-gold-500" />
             </div>
-            <h1 className="text-2xl font-bold text-white">ON TARGET UNITED</h1>
+            <h1 className="text-2xl font-bold text-black">ON TARGET UNITED</h1>
             <p className="text-navy-300 text-sm mt-1">Inventory Management System</p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-600 text-sm">
               {error}
             </div>
           )}
@@ -55,7 +55,7 @@ export default function LoginPage() {
                 placeholder="Email Address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white placeholder-navy-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/20 transition"
+                className="w-full pl-10 pr-4 py-3 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black placeholder-navy-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/20 transition"
                 required
               />
             </div>
@@ -67,7 +67,7 @@ export default function LoginPage() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white placeholder-navy-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/20 transition"
+                className="w-full pl-10 pr-12 py-3 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black placeholder-navy-400 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/20 transition"
                 required
               />
               <button
@@ -82,7 +82,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Please wait...' : 'Sign In'}
             </button>

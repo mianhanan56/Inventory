@@ -112,7 +112,7 @@ export default function Dashboard() {
     }
   }
 
-  const PIE_COLORS = ['#d4a017', '#3f51b5', '#00c853', '#ff6d00', '#aa00ff'];
+  const PIE_COLORS = ['#10b981', '#374151', '#9ca3af', '#059669', '#d1d5db'];
 
   const formatCurrency = (val: number) => `R ${val.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 
@@ -128,7 +128,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-black">Dashboard</h1>
           <p className="text-navy-400 text-sm mt-1">Welcome back to your inventory overview</p>
         </div>
         <div className="text-navy-400 text-sm flex items-center gap-2">
@@ -143,15 +143,15 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-navy-400 text-sm">Total Revenue</p>
-              <p className="text-2xl font-bold text-white mt-1">{formatCurrency(stats.totalRevenue)}</p>
+              <p className="text-2xl font-bold text-black mt-1">{formatCurrency(stats.totalRevenue)}</p>
             </div>
             <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-green-400" />
+              <DollarSign className="w-5 h-5 text-green-600" />
             </div>
           </div>
           <div className="flex items-center gap-1 mt-3 text-xs">
-            <ArrowUpRight className="w-3 h-3 text-green-400" />
-            <span className="text-green-400 font-medium">+{stats.revenueChange}%</span>
+            <ArrowUpRight className="w-3 h-3 text-green-600" />
+            <span className="text-green-600 font-medium">+{stats.revenueChange}%</span>
             <span className="text-navy-400 ml-1">vs last month</span>
           </div>
         </GlassCard>
@@ -160,7 +160,7 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-navy-400 text-sm">Total Products</p>
-              <p className="text-2xl font-bold text-white mt-1">{stats.totalProducts}</p>
+              <p className="text-2xl font-bold text-black mt-1">{stats.totalProducts}</p>
             </div>
             <div className="w-10 h-10 bg-gold-500/10 rounded-xl flex items-center justify-center">
               <Package className="w-5 h-5 text-gold-400" />
@@ -175,15 +175,15 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-navy-400 text-sm">Low Stock Alerts</p>
-              <p className="text-2xl font-bold text-white mt-1">{stats.lowStockCount}</p>
+              <p className="text-2xl font-bold text-black mt-1">{stats.lowStockCount}</p>
             </div>
             <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
           </div>
           <div className="flex items-center gap-1 mt-3 text-xs">
-            <ArrowDownRight className="w-3 h-3 text-red-400" />
-            <span className="text-red-400 font-medium">Needs attention</span>
+            <ArrowDownRight className="w-3 h-3 text-red-600" />
+            <span className="text-red-600 font-medium">Needs attention</span>
           </div>
         </GlassCard>
 
@@ -191,15 +191,15 @@ export default function Dashboard() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-navy-400 text-sm">Total Sales</p>
-              <p className="text-2xl font-bold text-white mt-1">{stats.totalSales}</p>
+              <p className="text-2xl font-bold text-black mt-1">{stats.totalSales}</p>
             </div>
             <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-              <ShoppingCart className="w-5 h-5 text-blue-400" />
+              <ShoppingCart className="w-5 h-5 text-blue-600" />
             </div>
           </div>
           <div className="flex items-center gap-1 mt-3 text-xs">
-            <ArrowUpRight className="w-3 h-3 text-green-400" />
-            <span className="text-green-400 font-medium">+{stats.salesChange}%</span>
+            <ArrowUpRight className="w-3 h-3 text-green-600" />
+            <span className="text-green-600 font-medium">+{stats.salesChange}%</span>
             <span className="text-navy-400 ml-1">vs last month</span>
           </div>
         </GlassCard>
@@ -211,7 +211,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-gold-400" />
-              <h3 className="text-white font-semibold">Revenue Trend</h3>
+              <h3 className="text-black font-semibold">Revenue Trend</h3>
             </div>
             <span className="text-navy-400 text-xs">Last 7 days</span>
           </div>
@@ -220,18 +220,18 @@ export default function Dashboard() {
               <AreaChart data={revenueData}>
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#d4a017" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#d4a017" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1a237e" opacity={0.3} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.8} />
                 <XAxis dataKey="date" stroke="#6b7280" fontSize={12} />
                 <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(v) => `R${v}`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0d1240', border: '1px solid #1a237e', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', color: '#171717' }}
                   formatter={(value: unknown) => [`R ${Number(value).toLocaleString('en-ZA')}`, 'Revenue']}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#d4a017" fill="url(#revenueGradient)" strokeWidth={2} />
+                <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revenueGradient)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -240,7 +240,7 @@ export default function Dashboard() {
         <GlassCard>
           <div className="flex items-center gap-2 mb-6">
             <BarChart3 className="w-5 h-5 text-gold-400" />
-            <h3 className="text-white font-semibold">Category Distribution</h3>
+            <h3 className="text-black font-semibold">Category Distribution</h3>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -259,7 +259,7 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0d1240', border: '1px solid #1a237e', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', color: '#171717' }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -280,7 +280,7 @@ export default function Dashboard() {
         {/* Recent Sales */}
         <GlassCard>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Recent Sales</h3>
+            <h3 className="text-black font-semibold">Recent Sales</h3>
             <span className="text-navy-400 text-xs">Last 5 transactions</span>
           </div>
           <div className="space-y-3">
@@ -290,13 +290,13 @@ export default function Dashboard() {
             {recentSales.map((sale) => (
               <div key={sale.id} className="flex items-center justify-between p-3 bg-navy-700/30 rounded-xl">
                 <div>
-                  <p className="text-white text-sm font-medium">{sale.invoice_number}</p>
+                  <p className="text-black text-sm font-medium">{sale.invoice_number}</p>
                   <p className="text-navy-400 text-xs">
                     {new Date(sale.created_at).toLocaleDateString('en-ZA')}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-white text-sm font-semibold">{formatCurrency(Number(sale.total))}</p>
+                  <p className="text-black text-sm font-semibold">{formatCurrency(Number(sale.total))}</p>
                   <div className="flex items-center justify-end gap-2 mt-1">
                     <StatusBadge
                       status={sale.status}
@@ -309,7 +309,7 @@ export default function Dashboard() {
                         const { printInvoice } = await import('../../lib/invoices');
                         printInvoice({ ...sale, sale_items: items }, items);
                       }}
-                      className="p-1 text-navy-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition"
+                      className="p-1 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded transition"
                       title="Print Invoice"
                     >
                       <Printer className="w-3.5 h-3.5" />
@@ -324,7 +324,7 @@ export default function Dashboard() {
         {/* Low Stock Alerts */}
         <GlassCard>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Low Stock Alerts</h3>
+            <h3 className="text-black font-semibold">Low Stock Alerts</h3>
             <span className="text-navy-400 text-xs">Items below minimum level</span>
           </div>
           <div className="space-y-3">
@@ -334,11 +334,11 @@ export default function Dashboard() {
             {lowStockProducts.map((product) => (
               <div key={product.id} className="flex items-center justify-between p-3 bg-navy-700/30 rounded-xl">
                 <div>
-                  <p className="text-white text-sm font-medium">{product.name}</p>
+                  <p className="text-black text-sm font-medium">{product.name}</p>
                   <p className="text-navy-400 text-xs">SKU: {product.sku}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-red-400 text-sm font-semibold">{product.current_stock} / {product.min_stock_level}</p>
+                  <p className="text-red-600 text-sm font-semibold">{product.current_stock} / {product.min_stock_level}</p>
                   <StatusBadge status="Low Stock" variant="danger" />
                 </div>
               </div>
@@ -350,10 +350,10 @@ export default function Dashboard() {
       {/* Stock Movements */}
       <GlassCard>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">Recent Stock Movements</h3>
+          <h3 className="text-black font-semibold">Recent Stock Movements</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-navy-700/50">
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Product</th>
@@ -369,14 +369,14 @@ export default function Dashboard() {
               )}
               {recentMovements.map((m) => (
                 <tr key={m.id} className="border-b border-navy-700/30 hover:bg-navy-700/20 transition">
-                  <td className="py-3 px-4 text-white">{m.product?.name || 'Unknown'}</td>
+                  <td className="py-3 px-4 text-black">{m.product?.name || 'Unknown'}</td>
                   <td className="py-3 px-4">
                     <StatusBadge
                       status={m.type.toUpperCase()}
                       variant={m.type === 'in' ? 'success' : m.type === 'out' ? 'danger' : m.type === 'return' ? 'info' : 'warning'}
                     />
                   </td>
-                  <td className="py-3 px-4 text-white font-medium">{m.type === 'adjustment' ? `→ ${m.quantity}` : m.type === 'in' ? `+${m.quantity}` : `-${m.quantity}`}</td>
+                  <td className="py-3 px-4 text-black font-medium">{m.type === 'adjustment' ? `→ ${m.quantity}` : m.type === 'in' ? `+${m.quantity}` : `-${m.quantity}`}</td>
                   <td className="py-3 px-4 text-navy-300">{m.reference || '-'}</td>
                   <td className="py-3 px-4 text-navy-300">{new Date(m.created_at).toLocaleDateString('en-ZA')}</td>
                 </tr>

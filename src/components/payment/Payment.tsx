@@ -55,12 +55,12 @@ export default function Payment() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Payment</h1>
+          <h1 className="text-2xl font-bold text-black">Payment</h1>
           <p className="text-navy-400 text-sm mt-1">Enter customer payment details</p>
         </div>
         <button
           onClick={() => { setForm({ name: '', phone: '' }); setModalOpen(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl transition text-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition text-sm"
         >
           <Plus className="w-4 h-4" /> Add Payment
         </button>
@@ -69,7 +69,7 @@ export default function Payment() {
       {/* Customer Payment Details */}
       <GlassCard padding="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-navy-700/50">
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Customer</th>
@@ -90,7 +90,7 @@ export default function Payment() {
                       <div className="w-8 h-8 bg-navy-600 rounded-lg flex items-center justify-center">
                         <User className="w-4 h-4 text-navy-300" />
                       </div>
-                      <span className="text-white font-medium">{record.name}</span>
+                      <span className="text-black font-medium">{record.name}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4 text-navy-300">{record.phone}</td>
@@ -113,7 +113,7 @@ export default function Payment() {
                       </button>
                       <button
                         onClick={() => removeRecord(record.id)}
-                        className="p-1.5 text-navy-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+                        className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -135,7 +135,7 @@ export default function Payment() {
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50"
+              className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
               autoFocus
               required
             />
@@ -146,16 +146,16 @@ export default function Payment() {
               type="tel"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50"
+              className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
               required
             />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-navy-700/50">
-            <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
+            <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
             <button
               type="submit"
               disabled={!form.name || !form.phone}
-              className="flex items-center gap-2 px-6 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl text-sm transition disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-2 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl text-sm transition disabled:opacity-50"
             >
               <CreditCard className="w-4 h-4" /> Submit Payment
             </button>

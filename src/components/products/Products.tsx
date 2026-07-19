@@ -193,10 +193,10 @@ export default function Products() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Products</h1>
+          <h1 className="text-2xl font-bold text-black">Products</h1>
           <p className="text-navy-400 text-sm mt-1">{products.length} products in inventory</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl transition text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition text-sm">
           <Plus className="w-4 h-4" /> Add Product
         </button>
       </div>
@@ -211,14 +211,14 @@ export default function Products() {
               placeholder="Search by name, SKU, or barcode..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition"
+              className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition"
             />
           </div>
           <div className="flex gap-3">
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50"
+              className="px-3 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
             >
               <option value="">All Categories</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -226,7 +226,7 @@ export default function Products() {
             <select
               value={stockFilter}
               onChange={(e) => setStockFilter(e.target.value)}
-              className="px-3 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50"
+              className="px-3 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
             >
               <option value="">All Stock Levels</option>
               <option value="low">Low Stock</option>
@@ -239,7 +239,7 @@ export default function Products() {
       {/* Products Table */}
       <GlassCard padding="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-navy-700/50">
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Product</th>
@@ -269,7 +269,7 @@ export default function Products() {
                         <Package className="w-4 h-4 text-navy-300" />
                       </div>
                       <div>
-                        <p className="text-white font-medium">{product.name}</p>
+                        <p className="text-black font-medium">{product.name}</p>
                         {product.barcode && (
                           <p className="text-navy-400 text-xs flex items-center gap-1"><Barcode className="w-3 h-3" />{product.barcode}</p>
                         )}
@@ -279,13 +279,13 @@ export default function Products() {
                   <td className="py-3 px-4 text-navy-300 font-mono text-xs">{product.sku}</td>
                   <td className="py-3 px-4 text-navy-300">{product.category?.name || '-'}</td>
                   <td className="py-3 px-4 text-navy-300 text-right">{fmt(product.cost_price)}</td>
-                  <td className="py-3 px-4 text-white font-medium text-right">{fmt(product.selling_price)}</td>
+                  <td className="py-3 px-4 text-black font-medium text-right">{fmt(product.selling_price)}</td>
                   <td className="py-3 px-4 text-right">
                     <span className="text-navy-300">{product.total_stock ?? product.current_stock}</span>
                     <span className="text-navy-400 text-xs"> {product.unit}</span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <span className={product.current_stock <= product.min_stock_level ? 'text-red-400 font-semibold' : 'text-white'}>
+                    <span className={product.current_stock <= product.min_stock_level ? 'text-red-600 font-semibold' : 'text-black'}>
                       {product.current_stock}
                     </span>
                     <span className="text-navy-400 text-xs"> {product.unit}</span>
@@ -309,14 +309,14 @@ export default function Products() {
                         onClick={() => openSale(product)}
                         disabled={product.current_stock <= 0}
                         title={product.current_stock <= 0 ? 'Out of stock' : 'Sale Stock'}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-emerald-600 hover:text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <ShoppingCart className="w-4 h-4" /> Sale Stock
                       </button>
                       <button onClick={() => openEdit(product)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => setDeleteModal(product)} className="p-1.5 text-navy-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
+                      <button onClick={() => setDeleteModal(product)} className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -333,53 +333,53 @@ export default function Products() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-navy-300 text-sm mb-1">Product Name *</label>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">SKU *</label>
-            <input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+            <input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Barcode</label>
-            <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div className="sm:col-span-2">
             <label className="block text-navy-300 text-sm mb-1">Description</label>
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Category</label>
-            <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+            <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
               <option value="">Select Category</option>
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Supplier</label>
-            <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+            <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
               <option value="">Select Supplier</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Cost Price (ZAR) *</label>
-            <input type="number" step="0.01" value={form.cost_price} onChange={(e) => setForm({ ...form, cost_price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+            <input type="number" step="0.01" value={form.cost_price} onChange={(e) => setForm({ ...form, cost_price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Selling Price (ZAR) *</label>
-            <input type="number" step="0.01" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+            <input type="number" step="0.01" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Total Stock</label>
-            <input type="number" value={form.total_stock} onChange={(e) => setForm({ ...form, total_stock: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input type="number" value={form.total_stock} onChange={(e) => setForm({ ...form, total_stock: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Min Stock Level</label>
-            <input type="number" value={form.min_stock_level} onChange={(e) => setForm({ ...form, min_stock_level: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input type="number" value={form.min_stock_level} onChange={(e) => setForm({ ...form, min_stock_level: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">Unit</label>
-            <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+            <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
               <option value="each">Each</option>
               <option value="kg">Kilogram</option>
               <option value="litre">Litre</option>
@@ -389,12 +389,12 @@ export default function Products() {
           </div>
           <div>
             <label className="block text-navy-300 text-sm mb-1">VAT Rate (%)</label>
-            <input type="number" step="0.01" value={form.vat_rate} onChange={(e) => setForm({ ...form, vat_rate: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+            <input type="number" step="0.01" value={form.vat_rate} onChange={(e) => setForm({ ...form, vat_rate: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-          <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
-          <button onClick={handleSave} disabled={saving || !form.name || !form.sku} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl text-sm transition disabled:opacity-50">
+          <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !form.name || !form.sku} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl text-sm transition disabled:opacity-50">
             {saving ? 'Saving...' : editProduct ? 'Update Product' : 'Add Product'}
           </button>
         </div>
@@ -404,15 +404,15 @@ export default function Products() {
       <Modal isOpen={!!deleteModal} onClose={() => setDeleteModal(null)} title="Delete Product" size="sm">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center shrink-0">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
+            <AlertTriangle className="w-5 h-5 text-red-600" />
           </div>
           <div>
-            <p className="text-white">Are you sure you want to delete <strong>{deleteModal?.name}</strong>?</p>
+            <p className="text-black">Are you sure you want to delete <strong>{deleteModal?.name}</strong>?</p>
             <p className="text-navy-400 text-sm mt-1">This action will deactivate the product.</p>
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-          <button onClick={() => setDeleteModal(null)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
+          <button onClick={() => setDeleteModal(null)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
           <button onClick={() => deleteModal && handleDelete(deleteModal)} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl text-sm transition">
             Delete
           </button>
@@ -425,12 +425,12 @@ export default function Products() {
           <>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center shrink-0">
-                <ShoppingCart className="w-5 h-5 text-emerald-400" />
+                <ShoppingCart className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-white font-medium">{saleProduct.name}</p>
+                <p className="text-black font-medium">{saleProduct.name}</p>
                 <p className="text-navy-400 text-sm">
-                  Available: <span className="text-white font-medium">{saleProduct.current_stock}</span> {saleProduct.unit}
+                  Available: <span className="text-black font-medium">{saleProduct.current_stock}</span> {saleProduct.unit}
                 </p>
               </div>
             </div>
@@ -446,14 +446,14 @@ export default function Products() {
                 onChange={(e) => { setSaleQty(e.target.value); setSaleError(''); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !selling) handleSale(); }}
                 autoFocus
-                className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50"
+                className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
               />
-              {saleError && <p className="text-red-400 text-sm mt-2">{saleError}</p>}
+              {saleError && <p className="text-red-600 text-sm mt-2">{saleError}</p>}
             </div>
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-              <button onClick={() => setSaleProduct(null)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
-              <button onClick={handleSale} disabled={selling || !saleQty} className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl text-sm transition disabled:opacity-50">
+              <button onClick={() => setSaleProduct(null)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
+              <button onClick={handleSale} disabled={selling || !saleQty} className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-semibold rounded-xl text-sm transition disabled:opacity-50">
                 {selling ? 'Processing...' : 'Confirm Sale'}
               </button>
             </div>

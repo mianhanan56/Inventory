@@ -25,8 +25,8 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative w-full ${sizeClasses[size]} bg-navy-800 border border-navy-600/30 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-navy-700/50">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-navy-400 hover:text-white transition p-1">
+          <h2 className="text-lg font-semibold text-black">{title}</h2>
+          <button onClick={onClose} className="text-navy-400 hover:text-black transition p-1">
             <X className="w-5 h-5" />
           </button>
         </div>

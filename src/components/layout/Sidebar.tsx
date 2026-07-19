@@ -34,8 +34,8 @@ export default function Sidebar() {
 
   const roleColors: Record<string, string> = {
     admin: 'bg-gold-500/20 text-gold-400',
-    manager: 'bg-blue-500/20 text-blue-400',
-    staff: 'bg-green-500/20 text-green-400',
+    manager: 'bg-blue-500/20 text-blue-600',
+    staff: 'bg-green-500/20 text-green-600',
   };
 
   function SidebarContent() {
@@ -48,7 +48,7 @@ export default function Sidebar() {
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="text-white font-bold text-lg leading-tight truncate">ON TARGET</h1>
+                <h1 className="text-black font-bold text-lg leading-tight truncate">ON TARGET</h1>
                 <p className="text-navy-400 text-xs">UNITED</p>
               </div>
             )}
@@ -66,7 +66,7 @@ export default function Sidebar() {
                 `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? 'bg-gold-500/10 text-gold-400 border border-gold-500/20'
-                    : 'text-navy-300 hover:text-white hover:bg-navy-700/50'
+                    : 'text-navy-300 hover:text-black hover:bg-navy-700/50'
                 } ${collapsed ? 'justify-center' : ''}`
               }
             >
@@ -79,11 +79,11 @@ export default function Sidebar() {
         <div className="p-3 border-t border-navy-700/50">
           {!collapsed && profile && (
             <div className="flex items-center gap-3 px-3 py-2 mb-2">
-              <div className="w-9 h-9 bg-navy-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shrink-0">
+              <div className="w-9 h-9 bg-navy-600 rounded-full flex items-center justify-center text-black font-semibold text-sm shrink-0">
                 {profile.full_name?.charAt(0)?.toUpperCase() || profile.email.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-white text-sm font-medium truncate">{profile.full_name || profile.email}</p>
+                <p className="text-black text-sm font-medium truncate">{profile.full_name || profile.email}</p>
                 <span className={`inline-block text-xs px-2 py-0.5 rounded-full ${roleColors[profile.role] || roleColors.staff}`}>
                   {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
                 </span>
@@ -92,7 +92,7 @@ export default function Sidebar() {
           )}
           <button
             onClick={signOut}
-            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-navy-300 hover:text-red-400 hover:bg-red-500/10 transition ${collapsed ? 'justify-center' : ''}`}
+            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-navy-300 hover:text-red-600 hover:bg-red-500/10 transition ${collapsed ? 'justify-center' : ''}`}
           >
             <LogOut className="w-5 h-5 shrink-0" />
             {!collapsed && <span>Sign Out</span>}
@@ -110,9 +110,9 @@ export default function Sidebar() {
           <div className="w-8 h-8 bg-gold-500/10 border border-gold-500/20 rounded-lg flex items-center justify-center">
             <Package className="w-4 h-4 text-gold-500" />
           </div>
-          <span className="text-white font-bold">ON TARGET UNITED</span>
+          <span className="text-black font-bold">ON TARGET UNITED</span>
         </div>
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="text-navy-300 hover:text-white">
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="text-navy-300 hover:text-black">
           {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
@@ -132,7 +132,7 @@ export default function Sidebar() {
         <SidebarContent />
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-8 w-6 h-6 bg-navy-700 border border-navy-600 rounded-full flex items-center justify-center text-navy-300 hover:text-white hover:bg-navy-600 transition"
+          className="absolute -right-3 top-8 w-6 h-6 bg-navy-700 border border-navy-600 rounded-full flex items-center justify-center text-navy-300 hover:text-black hover:bg-navy-600 transition"
         >
           <ChevronLeft className={`w-3 h-3 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
         </button>

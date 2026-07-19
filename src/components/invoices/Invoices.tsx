@@ -191,10 +191,10 @@ export default function Invoices() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Invoices</h1>
+          <h1 className="text-2xl font-bold text-black">Invoices</h1>
           <p className="text-navy-400 text-sm mt-1">Generate, print, and download professional invoices</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl transition text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition text-sm">
           <Plus className="w-4 h-4" /> Create Invoice
         </button>
       </div>
@@ -202,13 +202,13 @@ export default function Invoices() {
       <GlassCard padding="p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400" />
-          <input type="text" placeholder="Search invoices..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition" />
+          <input type="text" placeholder="Search invoices..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black placeholder-navy-400 text-sm focus:outline-none focus:border-gold-500/50 transition" />
         </div>
       </GlassCard>
 
       <GlassCard padding="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-navy-700/50">
                 <th className="text-left py-3 px-4 text-navy-400 font-medium">Invoice #</th>
@@ -229,13 +229,13 @@ export default function Invoices() {
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-gold-400" />
                       <div>
-                        <span className="text-white font-medium font-mono">{m.invoice_number}</span>
+                        <span className="text-black font-medium font-mono">{m.invoice_number}</span>
                         <p className="text-navy-400 text-xs">{m.product_name} &times; {m.quantity}</p>
                       </div>
                     </div>
                   </td>
                   <td className="py-3 px-4 text-navy-300">{m.customer_name}</td>
-                  <td className="py-3 px-4 text-white font-semibold text-right">{fmt(manualTotal(m))}</td>
+                  <td className="py-3 px-4 text-black font-semibold text-right">{fmt(manualTotal(m))}</td>
                   <td className="py-3 px-4 text-navy-300">{(m.payment || 'cash').toUpperCase()}</td>
                   <td className="py-3 px-4">
                     <StatusBadge status="completed" variant="success" />
@@ -246,13 +246,13 @@ export default function Invoices() {
                       <button onClick={() => viewManual(m)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition" title="View">
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button onClick={() => downloadManual(m)} className="p-1.5 text-navy-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition" title="Download HTML">
+                      <button onClick={() => downloadManual(m)} className="p-1.5 text-navy-400 hover:text-green-600 hover:bg-green-500/10 rounded-lg transition" title="Download HTML">
                         <Download className="w-4 h-4" />
                       </button>
-                      <button onClick={() => printManual(m)} className="p-1.5 text-navy-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition" title="Print">
+                      <button onClick={() => printManual(m)} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Print">
                         <Printer className="w-4 h-4" />
                       </button>
-                      <button onClick={() => removeManual(m.id)} className="p-1.5 text-navy-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition" title="Delete">
+                      <button onClick={() => removeManual(m.id)} className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition" title="Delete">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -264,11 +264,11 @@ export default function Invoices() {
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-gold-400" />
-                      <span className="text-white font-medium font-mono">{sale.invoice_number}</span>
+                      <span className="text-black font-medium font-mono">{sale.invoice_number}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4 text-navy-300">{sale.customer?.name || 'Walk-in'}</td>
-                  <td className="py-3 px-4 text-white font-semibold text-right">{fmt(Number(sale.total))}</td>
+                  <td className="py-3 px-4 text-black font-semibold text-right">{fmt(Number(sale.total))}</td>
                   <td className="py-3 px-4 text-navy-300">{sale.payment_method.toUpperCase()}</td>
                   <td className="py-3 px-4">
                     <StatusBadge status={sale.status} variant={sale.status === 'completed' ? 'success' : sale.status === 'cancelled' ? 'danger' : 'neutral'} />
@@ -283,10 +283,10 @@ export default function Invoices() {
                           <button onClick={() => viewInvoice(sale)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition" title="View">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleDownload(sale)} className="p-1.5 text-navy-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition" title="Download HTML">
+                          <button onClick={() => handleDownload(sale)} className="p-1.5 text-navy-400 hover:text-green-600 hover:bg-green-500/10 rounded-lg transition" title="Download HTML">
                             <Download className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handlePrint(sale)} className="p-1.5 text-navy-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition" title="Print">
+                          <button onClick={() => handlePrint(sale)} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Print">
                             <Printer className="w-4 h-4" />
                           </button>
                         </>
@@ -305,10 +305,10 @@ export default function Invoices() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedSale(null)} />
           <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 bg-navy-800 text-white">
+            <div className="flex items-center justify-between px-6 py-4 bg-navy-800 text-black">
               <h2 className="text-lg font-semibold">Invoice {selectedSale.invoice_number}</h2>
               <div className="flex gap-2">
-                <button onClick={() => downloadHtml(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-gold-500 hover:bg-gold-600 text-navy-900 rounded-lg text-sm font-medium transition">
+                <button onClick={() => downloadHtml(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-gold-500 hover:bg-gold-600 text-black rounded-lg text-sm font-medium transition">
                   <Download className="w-4 h-4" /> Download
                 </button>
                 <button onClick={() => printInvoice(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-navy-600 hover:bg-navy-500 rounded-lg text-sm font-medium transition">
@@ -334,35 +334,35 @@ export default function Invoices() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-navy-300 text-sm mb-1">Customer Name *</label>
-              <input type="text" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" autoFocus required />
+              <input type="text" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" autoFocus required />
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Date</label>
-              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-navy-300 text-sm mb-1">Product Name *</label>
-              <input type="text" value={form.product_name} onChange={(e) => setForm({ ...form, product_name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+              <input type="text" value={form.product_name} onChange={(e) => setForm({ ...form, product_name: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Quantity</label>
-              <input type="number" min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+              <input type="number" min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Price (ZAR) *</label>
-              <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" required />
+              <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" required />
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Tax (ZAR)</label>
-              <input type="number" step="0.01" value={form.tax} onChange={(e) => setForm({ ...form, tax: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+              <input type="number" step="0.01" value={form.tax} onChange={(e) => setForm({ ...form, tax: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Discount (ZAR)</label>
-              <input type="number" step="0.01" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50" />
+              <input type="number" step="0.01" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
             </div>
             <div>
               <label className="block text-navy-300 text-sm mb-1">Payment Method</label>
-              <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-white text-sm focus:outline-none focus:border-gold-500/50">
+              <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value })} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
                 <option value="cash">Cash</option>
                 <option value="card">Card</option>
                 <option value="eft">EFT</option>
@@ -371,8 +371,8 @@ export default function Invoices() {
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-navy-700/50">
-            <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 text-navy-300 hover:text-white transition text-sm">Cancel</button>
-            <button type="submit" disabled={!form.customer_name || !form.product_name || !form.price} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold rounded-xl text-sm transition disabled:opacity-50">
+            <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 text-navy-300 hover:text-black transition text-sm">Cancel</button>
+            <button type="submit" disabled={!form.customer_name || !form.product_name || !form.price} className="px-6 py-2 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl text-sm transition disabled:opacity-50">
               Create Invoice
             </button>
           </div>
