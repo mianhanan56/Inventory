@@ -115,10 +115,13 @@ export interface SaleItem {
   created_at: string;
 }
 
+export type DiscountType = 'percentage' | 'fixed';
+
 export interface CartItem {
   product: Product;
   quantity: number;
   discount: number;
+  discount_type: DiscountType;
 }
 
 export type UserRole = 'admin' | 'manager' | 'staff';

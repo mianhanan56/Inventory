@@ -11,8 +11,6 @@ import {
   FileText,
   CreditCard,
   LogOut,
-  Menu,
-  X,
   ChevronLeft,
 } from 'lucide-react';
 
@@ -104,19 +102,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-navy-800/90 backdrop-blur-xl border-b border-navy-700/50 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gold-500/10 border border-gold-500/20 rounded-lg flex items-center justify-center">
-            <Package className="w-4 h-4 text-gold-500" />
-          </div>
-          <span className="text-black font-bold">ON TARGET UNITED</span>
-        </div>
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="text-navy-300 hover:text-black">
-          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
-      </div>
-
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />

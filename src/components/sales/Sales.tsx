@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Product, Customer, CartItem, Sale } from '../../types';
+import { Product, Customer, CartItem, Sale, DiscountType } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
@@ -17,7 +17,6 @@ export default function Sales() {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'eft' | 'credit'>('cash');
-  const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,8 +46,32 @@ export default function Sales() {
         item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
     } else {
-      setCart([...cart, { product, quantity: 1, discount: 0 }]);
+      setCart([...cart, { product, quantity: 1, discount: 0, discount_type: 'fixed' }]);
     }
+  }
+
+  // Resolve a cart item's discount to an actual monetary amount, respecting its
+  // discount type. Percentage discounts are computed off the item's line price;
+  // fixed discounts are taken as-is. The result is clamped to [0, line price] so
+  // a discount can never make a line negative or exceed its own value.
+  function itemDiscountAmount(item: CartItem): number {
+    const linePrice = item.product.selling_price * item.quantity;
+    const raw = item.discount_type === 'percentage'
+      ? linePrice * (item.discount / 100)
+      : item.discount;
+    return Math.min(Math.max(raw || 0, 0), linePrice);
+  }
+
+  function updateItemDiscount(productId: string, discount: number) {
+    setCart(cart.map(item =>
+      item.product.id === productId ? { ...item, discount } : item
+    ));
+  }
+
+  function updateItemDiscountType(productId: string, discount_type: DiscountType) {
+    setCart(cart.map(item =>
+      item.product.id === productId ? { ...item, discount_type } : item
+    ));
   }
 
   function updateQuantity(productId: string, qty: number) {
@@ -64,15 +87,19 @@ export default function Sales() {
 
   const subtotal = cart.reduce((sum, item) => {
     const linePrice = item.product.selling_price * item.quantity;
-    return sum + linePrice - item.discount;
+    return sum + linePrice - itemDiscountAmount(item);
   }, 0);
 
   const vatTotal = cart.reduce((sum, item) => {
-    const linePrice = (item.product.selling_price * item.quantity) - item.discount;
+    const linePrice = (item.product.selling_price * item.quantity) - itemDiscountAmount(item);
     return sum + (linePrice * item.product.vat_rate / 100);
   }, 0);
 
-  const total = subtotal + vatTotal - discount;
+  // Total discount applied across all cart items (each resolved to a monetary
+  // amount according to its own discount type). Used for the sale's discount_total.
+  const totalItemDiscount = cart.reduce((sum, item) => sum + itemDiscountAmount(item), 0);
+
+  const total = subtotal + vatTotal;
 
   // Generate the next invoice number as INV-YYYYMM-NNNN by reading the highest
   // existing number for the current month and incrementing it. This replaces the
@@ -114,7 +141,7 @@ export default function Sales() {
           customer_id: selectedCustomer || null,
           subtotal,
           vat_total: vatTotal,
-          discount_total: discount,
+          discount_total: totalItemDiscount,
           total,
           payment_method: paymentMethod,
           status: 'completed' as const,
@@ -128,16 +155,19 @@ export default function Sales() {
       }
       if (!saleResult) throw new Error('Could not generate a unique invoice number. Please try again.');
 
-      const saleItems = cart.map(item => ({
-        sale_id: saleResult.id,
-        product_id: item.product.id,
-        product_name: item.product.name,
-        quantity: item.quantity,
-        unit_price: item.product.selling_price,
-        vat_rate: item.product.vat_rate,
-        discount: item.discount,
-        line_total: (item.product.selling_price * item.quantity) - item.discount,
-      }));
+      const saleItems = cart.map(item => {
+        const itemDiscount = itemDiscountAmount(item);
+        return {
+          sale_id: saleResult.id,
+          product_id: item.product.id,
+          product_name: item.product.name,
+          quantity: item.quantity,
+          unit_price: item.product.selling_price,
+          vat_rate: item.product.vat_rate,
+          discount: itemDiscount,
+          line_total: (item.product.selling_price * item.quantity) - itemDiscount,
+        };
+      });
 
       const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
       if (itemsError) throw itemsError;
@@ -172,7 +202,6 @@ export default function Sales() {
       // Reset
       setCart([]);
       setSelectedCustomer('');
-      setDiscount(0);
       setNotes('');
       loadData();
     } catch (err) {
@@ -197,7 +226,7 @@ export default function Sales() {
     (p.barcode && p.barcode.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const paymentIcons: Record<string, typeof Banknote> = { cash: Banknote, card: CreditCard, eft: CreditCard, credit: Receipt };
 
@@ -300,8 +329,36 @@ export default function Sales() {
                         </button>
                       </div>
                       <span className="text-gold-400 font-semibold text-sm">
-                        {fmt(item.product.selling_price * item.quantity - item.discount)}
+                        {fmt(item.product.selling_price * item.quantity - itemDiscountAmount(item))}
                       </span>
+                    </div>
+                    <div className="mt-2">
+                      <label className="block text-navy-300 text-xs mb-1">Discount</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.discount || ''}
+                          onChange={(e) => updateItemDiscount(item.product.id, Number(e.target.value))}
+                          placeholder="0"
+                          className="min-w-0 flex-1 px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
+                        />
+                        <select
+                          value={item.discount_type}
+                          onChange={(e) => updateItemDiscountType(item.product.id, e.target.value as DiscountType)}
+                          className="px-2 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
+                        >
+                          <option value="fixed">R (ZAR)</option>
+                          <option value="percentage">% (Percent)</option>
+                        </select>
+                      </div>
+                      {itemDiscountAmount(item) > 0 && (
+                        <p className="text-red-600 text-xs mt-1">
+                          -{fmt(itemDiscountAmount(item))}
+                          {item.discount_type === 'percentage' && ` (${item.discount}%)`}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -340,11 +397,6 @@ export default function Sales() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-navy-300 text-xs mb-1">Discount (ZAR)</label>
-                    <input type="number" step="0.01" value={discount || ''} onChange={(e) => setDiscount(Number(e.target.value))} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50" />
-                  </div>
-
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between text-navy-300">
                       <span>Subtotal</span><span>{fmt(subtotal)}</span>
@@ -352,9 +404,9 @@ export default function Sales() {
                     <div className="flex justify-between text-navy-300">
                       <span>VAT</span><span>{fmt(vatTotal)}</span>
                     </div>
-                    {discount > 0 && (
+                    {totalItemDiscount > 0 && (
                       <div className="flex justify-between text-red-600">
-                        <span>Discount</span><span>-{fmt(discount)}</span>
+                        <span>Discount</span><span>-{fmt(totalItemDiscount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-black font-bold text-lg pt-2 border-t border-navy-700/50">
