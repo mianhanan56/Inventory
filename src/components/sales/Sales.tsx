@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Product, Customer, CartItem, Sale, DiscountType } from '../../types';
+import { Product, Customer, CartItem, Sale } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
@@ -46,31 +46,20 @@ export default function Sales() {
         item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
       ));
     } else {
-      setCart([...cart, { product, quantity: 1, discount: 0, discount_type: 'fixed' }]);
+      setCart([...cart, { product, quantity: 1, unit_price: product.selling_price }]);
     }
   }
 
-  // Resolve a cart item's discount to an actual monetary amount, respecting its
-  // discount type. Percentage discounts are computed off the item's line price;
-  // fixed discounts are taken as-is. The result is clamped to [0, line price] so
-  // a discount can never make a line negative or exceed its own value.
+  // Amount discounted on a line = how far its edited unit price sits below the
+  // product's original selling price, times quantity. Never negative (raising the
+  // price above the original is not treated as a discount).
   function itemDiscountAmount(item: CartItem): number {
-    const linePrice = item.product.selling_price * item.quantity;
-    const raw = item.discount_type === 'percentage'
-      ? linePrice * (item.discount / 100)
-      : item.discount;
-    return Math.min(Math.max(raw || 0, 0), linePrice);
+    return Math.max(0, (item.product.selling_price - item.unit_price) * item.quantity);
   }
 
-  function updateItemDiscount(productId: string, discount: number) {
+  function updateItemPrice(productId: string, unit_price: number) {
     setCart(cart.map(item =>
-      item.product.id === productId ? { ...item, discount } : item
-    ));
-  }
-
-  function updateItemDiscountType(productId: string, discount_type: DiscountType) {
-    setCart(cart.map(item =>
-      item.product.id === productId ? { ...item, discount_type } : item
+      item.product.id === productId ? { ...item, unit_price } : item
     ));
   }
 
@@ -85,18 +74,15 @@ export default function Sales() {
     setCart(cart.filter(item => item.product.id !== productId));
   }
 
-  const subtotal = cart.reduce((sum, item) => {
-    const linePrice = item.product.selling_price * item.quantity;
-    return sum + linePrice - itemDiscountAmount(item);
-  }, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
 
   const vatTotal = cart.reduce((sum, item) => {
-    const linePrice = (item.product.selling_price * item.quantity) - itemDiscountAmount(item);
+    const linePrice = item.unit_price * item.quantity;
     return sum + (linePrice * item.product.vat_rate / 100);
   }, 0);
 
-  // Total discount applied across all cart items (each resolved to a monetary
-  // amount according to its own discount type). Used for the sale's discount_total.
+  // Total discount given across the cart = sum of each line's reduction below its
+  // original selling price. Recorded on the sale for reporting/receipts.
   const totalItemDiscount = cart.reduce((sum, item) => sum + itemDiscountAmount(item), 0);
 
   const total = subtotal + vatTotal;
@@ -162,10 +148,10 @@ export default function Sales() {
           product_id: item.product.id,
           product_name: item.product.name,
           quantity: item.quantity,
-          unit_price: item.product.selling_price,
+          unit_price: item.unit_price,
           vat_rate: item.product.vat_rate,
           discount: itemDiscount,
-          line_total: (item.product.selling_price * item.quantity) - itemDiscount,
+          line_total: item.unit_price * item.quantity,
         };
       });
 
@@ -329,34 +315,33 @@ export default function Sales() {
                         </button>
                       </div>
                       <span className="text-gold-400 font-semibold text-sm">
-                        {fmt(item.product.selling_price * item.quantity - itemDiscountAmount(item))}
+                        {fmt(item.unit_price * item.quantity)}
                       </span>
                     </div>
                     <div className="mt-2">
-                      <label className="block text-navy-300 text-xs mb-1">Discount</label>
-                      <div className="flex gap-2">
+                      <label className="block text-navy-300 text-xs mb-1">Unit Price (R)</label>
+                      <div className="flex items-center gap-2">
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={item.discount || ''}
-                          onChange={(e) => updateItemDiscount(item.product.id, Number(e.target.value))}
-                          placeholder="0"
+                          value={item.unit_price}
+                          onChange={(e) => updateItemPrice(item.product.id, Number(e.target.value))}
                           className="min-w-0 flex-1 px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
                         />
-                        <select
-                          value={item.discount_type}
-                          onChange={(e) => updateItemDiscountType(item.product.id, e.target.value as DiscountType)}
-                          className="px-2 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50"
-                        >
-                          <option value="fixed">R (ZAR)</option>
-                          <option value="percentage">% (Percent)</option>
-                        </select>
+                        {item.unit_price !== item.product.selling_price && (
+                          <button
+                            onClick={() => updateItemPrice(item.product.id, item.product.selling_price)}
+                            className="text-navy-400 hover:text-gold-400 text-xs whitespace-nowrap px-2 py-2 transition"
+                            title="Reset to original price"
+                          >
+                            Reset
+                          </button>
+                        )}
                       </div>
                       {itemDiscountAmount(item) > 0 && (
                         <p className="text-red-600 text-xs mt-1">
-                          -{fmt(itemDiscountAmount(item))}
-                          {item.discount_type === 'percentage' && ` (${item.discount}%)`}
+                          -{fmt(itemDiscountAmount(item))} off ({fmt(item.product.selling_price)} each)
                         </p>
                       )}
                     </div>

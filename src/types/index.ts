@@ -115,13 +115,12 @@ export interface SaleItem {
   created_at: string;
 }
 
-export type DiscountType = 'percentage' | 'fixed';
-
 export interface CartItem {
   product: Product;
   quantity: number;
-  discount: number;
-  discount_type: DiscountType;
+  // Effective unit selling price for this line. Defaults to the product's
+  // selling_price but can be edited per sale; lowering it acts as a discount.
+  unit_price: number;
 }
 
 export type UserRole = 'admin' | 'manager' | 'staff';
