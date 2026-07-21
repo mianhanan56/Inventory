@@ -16,7 +16,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
     .company-info .logo { height: 60px; width: auto; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
     .company-info h1 { color: #000; font-size: 24px; font-weight: 700; }
-    .company-info p { color: #000; font-size: 13px; margin-top: 2px; }
+    .company-info p { color: #000; font-size: 12px; margin-top: 2px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
     thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
     thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
@@ -52,7 +52,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       <div class="company-info">
         <img class="logo" src="${LOGO_DATA_URI}" alt="ON TARGET UNITED logo" />
         <h1>ON TARGET UNITED</h1>
-        <p>BLOCK C CHINA MALL, SPRINGFIELD, DURBAN</p>
+        <p>BLOCK C SHOP # 74 CHINA MALL, SPRINGFIELD, DURBAN</p>
         <p>Tel: 078 863 8987 | 067 606 1458</p>
       </div>
     </div>
