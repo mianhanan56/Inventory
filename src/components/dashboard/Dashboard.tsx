@@ -126,13 +126,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-black">Dashboard</h1>
           <p className="text-navy-400 text-sm mt-1">Welcome back to your inventory overview</p>
         </div>
-        <div className="text-navy-400 text-sm flex items-center gap-2">
-          <Clock className="w-4 h-4" />
+        <div className="text-navy-400 text-sm flex items-center gap-2 shrink-0">
+          <Clock className="w-4 h-4 shrink-0" />
           {new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </div>
       </div>
