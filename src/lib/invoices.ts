@@ -11,7 +11,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   <title>Invoice ${sale.invoice_number}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; line-height: 1.2; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; line-height: 1.2; font-weight: 500; }
     .invoice { max-width: 800px; margin: 0 auto; padding: 20px 2px 2px; }
     .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
     .company-info .logo { height: 60px; width: auto; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
