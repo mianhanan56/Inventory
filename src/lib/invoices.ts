@@ -11,16 +11,16 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   <title>Invoice ${sale.invoice_number}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; line-height: 1.2; font-weight: 500; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; line-height: 1.2; font-weight: 450; }
     .invoice { max-width: 800px; margin: 0 auto; padding: 20px 2px 2px; }
     .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
     .company-info .logo { height: 60px; width: auto; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
     .company-info h1 { color: #000; font-size: 24px; font-weight: 700; }
     .company-info p { color: #000; font-size: 12px; margin-top: 2px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
-    thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
+    thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
     thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
-    tbody td { padding: 4px 2px; border-bottom: 1px solid #000; font-size: 11px; word-wrap: break-word; overflow-wrap: break-word; }
+    tbody td { padding: 4px 2px; border-bottom: 1px solid #000; font-size: 13px; word-wrap: break-word; overflow-wrap: break-word; }
     tbody td:last-child, tbody td:nth-child(n+3) { text-align: right; }
     th:nth-child(1), td:nth-child(1) { width: 32%; }
     th:nth-child(2), td:nth-child(2) { width: 9%; }
