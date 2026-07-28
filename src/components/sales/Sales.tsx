@@ -1,23 +1,27 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { usePersistentState } from '../../hooks/usePersistentState';
 import { Product, Customer, CartItem, Sale } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
 import {
   Search, ShoppingCart, Plus, Minus, CreditCard,
-  Banknote, Receipt, Eye, X, Package, Printer, Download,
+  Banknote, Receipt, Eye, X, Package, Printer, Check, Trash2,
 } from 'lucide-react';
 
 export default function Sales() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // The in-progress sale is persisted so navigating to another screen via the
+  // sidebar and coming back keeps the selection. It is only cleared when the
+  // user explicitly removes items / clears the cart, or completes the sale.
+  const [cart, setCart] = usePersistentState<CartItem[]>('pos.cart', []);
   const [search, setSearch] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'eft' | 'credit'>('cash');
-  const [notes, setNotes] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = usePersistentState('pos.customer', '');
+  const [paymentMethod, setPaymentMethod] = usePersistentState<'cash' | 'card' | 'eft' | 'credit'>('pos.paymentMethod', 'cash');
+  const [notes, setNotes] = usePersistentState('pos.notes', '');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'pos' | 'history'>('pos');
@@ -32,10 +36,23 @@ export default function Sales() {
       supabase.from('customers').select('*').eq('is_active', true).order('name'),
       supabase.from('sales').select('*, customer:customers(*)').order('created_at', { ascending: false }).limit(50),
     ]);
-    setProducts(prodRes.data || []);
+    const freshProducts = prodRes.data || [];
+    setProducts(freshProducts);
     setCustomers(custRes.data || []);
     setSales(salesRes.data || []);
+    // Refresh the product snapshot held by a restored cart (price, stock) while
+    // keeping the user's edited unit prices and quantities untouched.
+    setCart(prev => prev.map(item => {
+      const fresh = freshProducts.find(p => p.id === item.product.id);
+      return fresh ? { ...item, product: fresh } : item;
+    }));
     setLoading(false);
+  }
+
+  function clearCart() {
+    setCart([]);
+    setSelectedCustomer('');
+    setNotes('');
   }
 
   function addToCart(product: Product) {
@@ -186,9 +203,7 @@ export default function Sales() {
       if (stockUpdateError) throw stockUpdateError;
 
       // Reset
-      setCart([]);
-      setSelectedCustomer('');
-      setNotes('');
+      clearCart();
       loadData();
     } catch (err) {
       console.error('Sale error:', err);
@@ -213,6 +228,9 @@ export default function Sales() {
   );
 
   const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Quantity of a product already in the cart — drives the card's active state.
+  const cartQuantity = (productId: string) => cart.find(item => item.product.id === productId)?.quantity ?? 0;
 
   const paymentIcons: Record<string, typeof Banknote> = { cash: Banknote, card: CreditCard, eft: CreditCard, credit: Receipt };
 
@@ -256,38 +274,65 @@ export default function Sales() {
             </GlassCard>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredProducts.map(product => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className="text-left bg-navy-800/40 backdrop-blur-xl border border-navy-700/30 rounded-xl p-4 hover:border-gold-500/30 hover:bg-navy-800/60 transition group"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="w-10 h-10 bg-navy-600 rounded-lg flex items-center justify-center group-hover:bg-gold-500/10 transition">
-                      <Package className="w-5 h-5 text-navy-300 group-hover:text-gold-400 transition" />
+              {filteredProducts.map(product => {
+                const inCartQty = cartQuantity(product.id);
+                const isSelected = inCartQty > 0;
+                return (
+                  <button
+                    key={product.id}
+                    onClick={() => addToCart(product)}
+                    aria-pressed={isSelected}
+                    className={`relative text-left backdrop-blur-xl rounded-xl p-4 transition group ${
+                      isSelected
+                        ? 'bg-gold-500/10 border-2 border-gold-500 ring-2 ring-gold-500/20 shadow-lg shadow-gold-500/10'
+                        : 'bg-navy-800/40 border-2 border-navy-700/30 hover:border-gold-500/30 hover:bg-navy-800/60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition ${isSelected ? 'bg-gold-500/20' : 'bg-navy-600 group-hover:bg-gold-500/10'}`}>
+                        <Package className={`w-5 h-5 transition ${isSelected ? 'text-gold-500' : 'text-navy-300 group-hover:text-gold-400'}`} />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {product.current_stock <= product.min_stock_level && (
+                          <span className="text-xs bg-red-500/15 text-red-600 px-2 py-0.5 rounded-full">Low</span>
+                        )}
+                        {isSelected && (
+                          <span className="flex items-center gap-1 text-xs font-semibold bg-gold-500 text-black px-2 py-0.5 rounded-full">
+                            <Check className="w-3 h-3" />{inCartQty}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {product.current_stock <= product.min_stock_level && (
-                      <span className="text-xs bg-red-500/15 text-red-600 px-2 py-0.5 rounded-full">Low</span>
-                    )}
-                  </div>
-                  <h4 className="text-black font-medium text-sm mt-2 truncate">{product.name}</h4>
-                  <p className="text-navy-400 text-xs">{product.sku}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-gold-400 font-semibold">{fmt(product.selling_price)}</span>
-                    <span className="text-navy-400 text-xs">{product.current_stock} in stock</span>
-                  </div>
-                </button>
-              ))}
+                    <h4 className="text-black font-medium text-sm mt-2 truncate">{product.name}</h4>
+                    <p className="text-navy-400 text-xs">{product.sku}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-gold-400 font-semibold">{fmt(product.selling_price)}</span>
+                      <span className="text-navy-400 text-xs">{product.current_stock} in stock</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Cart */}
           <div className="space-y-4">
             <GlassCard className="sticky top-4">
-              <h3 className="text-black font-semibold flex items-center gap-2 mb-4">
-                <ShoppingCart className="w-5 h-5 text-gold-400" />
-                Cart ({cart.length} items)
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-black font-semibold flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-gold-400" />
+                  Cart ({cart.length} items)
+                </h3>
+                {cart.length > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="flex items-center gap-1 text-navy-400 hover:text-red-600 text-xs font-medium px-2 py-1 rounded-lg transition"
+                    title="Clear the cart and start a new sale"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />Clear
+                  </button>
+                )}
+              </div>
 
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                 {cart.length === 0 && (
