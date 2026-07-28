@@ -55,16 +55,15 @@ export default function Sales() {
     setNotes('');
   }
 
-  function addToCart(product: Product) {
-    const existing = cart.find(item => item.product.id === product.id);
-    if (existing) {
-      if (existing.quantity >= product.current_stock) return;
-      setCart(cart.map(item =>
-        item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-      ));
-    } else {
-      setCart([...cart, { product, quantity: 1, unit_price: product.selling_price }]);
+  // Clicking a product card toggles it: first click selects it (adds one to the
+  // cart), clicking the selected card again deselects it. Quantities are changed
+  // with the +/- controls on the cart line, not by re-clicking the card.
+  function toggleCart(product: Product) {
+    if (cart.some(item => item.product.id === product.id)) {
+      removeFromCart(product.id);
+      return;
     }
+    setCart([...cart, { product, quantity: 1, unit_price: product.selling_price }]);
   }
 
   // Amount discounted on a line = how far its edited unit price sits below the
@@ -229,8 +228,8 @@ export default function Sales() {
 
   const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // Quantity of a product already in the cart — drives the card's active state.
-  const cartQuantity = (productId: string) => cart.find(item => item.product.id === productId)?.quantity ?? 0;
+  // Whether a product is already in the cart — drives the card's active state.
+  const isInCart = (productId: string) => cart.some(item => item.product.id === productId);
 
   const paymentIcons: Record<string, typeof Banknote> = { cash: Banknote, card: CreditCard, eft: CreditCard, credit: Receipt };
 
@@ -275,13 +274,13 @@ export default function Sales() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredProducts.map(product => {
-                const inCartQty = cartQuantity(product.id);
-                const isSelected = inCartQty > 0;
+                const isSelected = isInCart(product.id);
                 return (
                   <button
                     key={product.id}
-                    onClick={() => addToCart(product)}
+                    onClick={() => toggleCart(product)}
                     aria-pressed={isSelected}
+                    title={isSelected ? 'Click to deselect' : 'Click to select'}
                     className={`relative text-left backdrop-blur-xl rounded-xl p-4 transition group ${
                       isSelected
                         ? 'bg-gold-500/10 border-2 border-gold-500 ring-2 ring-gold-500/20 shadow-lg shadow-gold-500/10'
@@ -297,8 +296,8 @@ export default function Sales() {
                           <span className="text-xs bg-red-500/15 text-red-600 px-2 py-0.5 rounded-full">Low</span>
                         )}
                         {isSelected && (
-                          <span className="flex items-center gap-1 text-xs font-semibold bg-gold-500 text-black px-2 py-0.5 rounded-full">
-                            <Check className="w-3 h-3" />{inCartQty}
+                          <span className="flex items-center justify-center w-5 h-5 bg-gold-500 text-black rounded-full">
+                            <Check className="w-3 h-3" />
                           </span>
                         )}
                       </div>
