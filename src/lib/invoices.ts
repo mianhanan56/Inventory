@@ -20,9 +20,8 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
     thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
     thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
-    tbody td { padding: 4px 2px; font-size: 13px; word-wrap: break-word; overflow-wrap: break-word; }
+    tbody td { padding: 4px 2px; border-bottom: 1px solid #000; font-size: 13px; word-wrap: break-word; overflow-wrap: break-word; }
     tbody td:last-child, tbody td:nth-child(n+3) { text-align: right; }
-    tbody tr:last-child td { border-bottom: 1px solid #000; }
     th:nth-child(1), td:nth-child(1) { width: 32%; }
     th:nth-child(2), td:nth-child(2) { width: 9%; }
     th:nth-child(3), td:nth-child(3) { width: 24%; }
