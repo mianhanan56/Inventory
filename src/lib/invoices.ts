@@ -4,6 +4,12 @@ import { LOGO_DATA_URI } from './logo';
 export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  // Actual sale timestamp; falls back to now for a sale not yet persisted.
+  const stamp = sale.created_at ? new Date(sale.created_at) : new Date();
+  const saleDate = stamp.toLocaleDateString('en-ZA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const saleTime = stamp.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const saleStamp = `Date: ${saleDate} | Time: ${saleTime}`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -17,6 +23,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     .company-info .logo { height: 60px; width: auto; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
     .company-info h1 { color: #000; font-size: 24px; font-weight: 700; }
     .company-info p { color: #000; font-size: 12px; margin-top: 2px; }
+    .company-info .meta-date { font-size: 12px; margin-top: 4px; white-space: nowrap; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
     thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
     thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
@@ -33,6 +40,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     .returns-policy { margin-top: 10px; text-align: center; }
     .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
     .returns-policy .thanks { margin-top: 4px; font-weight: 700; text-transform: none; color: #000; }
+    .returns-policy .meta-time { margin-top: 6px; font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; white-space: nowrap; }
     .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
     .print-btn:hover { background: #333; }
     @media print {
@@ -54,6 +62,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
         <h1>ON TARGET UNITED</h1>
         <p>BLOCK C SHOP # 74 CHINA MALL, SPRINGFIELD, DURBAN</p>
         <p>Tel: 078 863 8987 | 067 606 1458</p>
+        <p class="meta-date">${saleStamp}</p>
       </div>
     </div>
 
@@ -90,6 +99,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     <div class="returns-policy">
       <p>NO RETURN, NO REFUND. EXCHANGE ONLY IN 7 DAYS WITH VALID PROOF OF PURCHASE.<br>ITEM SHOULD BE ORIGINAL PACKING &amp; RESALABLE</p>
       <p class="thanks">Thanks for shopping with us!</p>
+      <p class="meta-time">${saleStamp}</p>
     </div>
   </div>
 
