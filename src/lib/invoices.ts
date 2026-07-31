@@ -41,14 +41,53 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
     .returns-policy .thanks { margin-top: 4px; font-weight: 700; text-transform: none; color: #000; }    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
     .print-btn:hover { background: #333; }
+    /* Fallback page box. The inline script below replaces this with an
+       explicit 80mm x <measured>mm page so the receipt is always ONE slip:
+       Chrome treats "auto" height as "use the paper size from the print
+       dialog", which is what splits long receipts onto extra pages. */
+    @page { size: 80mm auto; margin: 0; }
+
     @media print {
-      @page { size: 80mm auto; margin: 0; }
-      html, body { width: 80mm; margin: 0; padding: 0; }
-      .print-btn { display: none; }
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body {
+        width: 80mm;
+        height: auto;
+        min-height: 0;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .print-btn { display: none !important; }
       /* 80mm roll: printable area is ~72mm, ~4mm non-printable each side.
          Content is 72mm centred so nothing is clipped on the right edge. */
-      .invoice { width: 72mm; max-width: none; margin: 0 auto; padding: 4mm 0 3mm; }
+      .invoice {
+        width: 72mm;
+        max-width: none;
+        height: auto;
+        min-height: 0;
+        max-height: none;
+        margin: 0 auto;
+        padding: 4mm 0 3mm;
+        overflow: visible;
+      }
+      /* Never split a line item, a total row or the footer across pages. */
+      table, thead, tbody, tr, td, th,
+      .header, .totals, .totals .row, .returns-policy {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      /* Nothing in a receipt may force a new page. */
+      * {
+        page-break-before: auto;
+        page-break-after: auto;
+        break-before: auto;
+        break-after: auto;
+      }
+      /* A repeated table header would only appear if the content overflowed a
+         page; keep it as a plain row group so it can never be duplicated. */
+      thead { display: table-row-group; }
     }
   </style>
 </head>
@@ -104,6 +143,36 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:6px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
     Print Invoice
   </button>
+
+  <script>
+    (function () {
+      var pageStyle = document.createElement('style');
+      document.head.appendChild(pageStyle);
+
+      // Measure the rendered receipt and pin @page to exactly that height, so
+      // the browser has a single page tall enough for all the content.
+      function sizePage() {
+        var invoice = document.querySelector('.invoice');
+        if (!invoice) return;
+        var px = Math.max(
+          invoice.getBoundingClientRect().height,
+          invoice.scrollHeight,
+          document.body.scrollHeight
+        );
+        // CSS px -> mm (96 px per inch), plus a small tail so a rounding
+        // error can never spill one stray line onto a second page.
+        var mm = Math.ceil((px * 25.4) / 96) + 5;
+        pageStyle.textContent = '@page { size: 80mm ' + mm + 'mm; margin: 0; }';
+      }
+
+      window.addEventListener('load', sizePage);
+      // Fonts/logo can settle after load and change the height.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizePage);
+      // Last chance: re-measure right before the print dialog opens.
+      window.addEventListener('beforeprint', sizePage);
+      sizePage();
+    })();
+  </script>
 </body>
 </html>`;
 }
