@@ -3,14 +3,22 @@ import { supabase } from '../../lib/supabase';
 import { Customer } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
-import { Plus, Search, Edit2, Trash2, Users, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
+import CustomerHistoryPanel from './CustomerHistoryPanel';
+import { Plus, Search, Edit2, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Receipt } from 'lucide-react';
+
+interface CustomerStats {
+  orders: number;
+  spent: number;
+}
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [stats, setStats] = useState<Record<string, CustomerStats>>({});
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModal, setDeleteModal] = useState<Customer | null>(null);
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -23,10 +31,25 @@ export default function Customers() {
 
   async function loadData() {
     setLoading(true);
-    const { data } = await supabase.from('customers').select('*').eq('is_active', true).order('name');
-    setCustomers(data || []);
+    const [custRes, salesRes] = await Promise.all([
+      supabase.from('customers').select('*').eq('is_active', true).order('name'),
+      // Order counts / spend per customer, so a card shows at a glance whether
+      // there is any purchase history behind it.
+      supabase.from('sales').select('customer_id, total').eq('status', 'completed').not('customer_id', 'is', null),
+    ]);
+    setCustomers(custRes.data || []);
+    const totals: Record<string, CustomerStats> = {};
+    for (const sale of salesRes.data || []) {
+      const id = sale.customer_id as string;
+      const entry = totals[id] || (totals[id] = { orders: 0, spent: 0 });
+      entry.orders += 1;
+      entry.spent += Number(sale.total) || 0;
+    }
+    setStats(totals);
     setLoading(false);
   }
+
+  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   function openCreate() {
     setEditCustomer(null);
@@ -90,7 +113,7 @@ export default function Customers() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-black">Customers</h1>
-          <p className="text-navy-400 text-sm mt-1">{customers.length} active customers</p>
+          <p className="text-navy-400 text-sm mt-1">{customers.length} active customers · click a card to see purchase history</p>
         </div>
         <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-black font-semibold rounded-xl transition text-sm">
           <Plus className="w-4 h-4" /> Add Customer
@@ -109,31 +132,57 @@ export default function Customers() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.length === 0 && <p className="text-navy-400 text-sm col-span-full text-center py-12">No customers found</p>}
-          {filtered.map(c => (
-            <GlassCard key={c.id} className="hover:border-navy-600/50 transition">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
+          {filtered.map(c => {
+            const stat = stats[c.id];
+            return (
+              /* The card body opens the purchase history; the edit/delete icons
+                 stop propagation so they still do their own thing. */
+              <div
+                key={c.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setHistoryCustomer(c)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHistoryCustomer(c); } }}
+                title="View purchase history"
+                className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/50 rounded-2xl"
+              >
+                <GlassCard className="h-full hover:border-gold-500/40 transition">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center">
+                        <Users className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-black font-semibold">{c.name}</h3>
+                        {c.vat_number && <p className="text-navy-400 text-xs">VAT: {c.vat_number}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(c); }} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteModal(c); }} className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-black font-semibold">{c.name}</h3>
-                    {c.vat_number && <p className="text-navy-400 text-xs">VAT: {c.vat_number}</p>}
+                  <div className="space-y-2 text-sm">
+                    {c.email && <div className="flex items-center gap-2 text-navy-300"><Mail className="w-4 h-4 text-navy-500" />{c.email}</div>}
+                    {c.phone && <div className="flex items-center gap-2 text-navy-300"><Phone className="w-4 h-4 text-navy-500" />{c.phone}</div>}
+                    {(c.city || c.province) && <div className="flex items-center gap-2 text-navy-300"><MapPin className="w-4 h-4 text-navy-500" />{[c.city, c.province].filter(Boolean).join(', ')}</div>}
                   </div>
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={() => openEdit(c)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={() => setDeleteModal(c)} className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
-                </div>
+                  <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-navy-700/40 text-xs">
+                    <span className="flex items-center gap-1.5 text-navy-400">
+                      <Receipt className="w-3.5 h-3.5" />
+                      {stat ? `${stat.orders} order${stat.orders === 1 ? '' : 's'} · ${fmt(stat.spent)}` : 'No purchases yet'}
+                    </span>
+                    <span className="text-gold-400 font-medium">View history →</span>
+                  </div>
+                </GlassCard>
               </div>
-              <div className="space-y-2 text-sm">
-                {c.email && <div className="flex items-center gap-2 text-navy-300"><Mail className="w-4 h-4 text-navy-500" />{c.email}</div>}
-                {c.phone && <div className="flex items-center gap-2 text-navy-300"><Phone className="w-4 h-4 text-navy-500" />{c.phone}</div>}
-                {(c.city || c.province) && <div className="flex items-center gap-2 text-navy-300"><MapPin className="w-4 h-4 text-navy-500" />{[c.city, c.province].filter(Boolean).join(', ')}</div>}
-              </div>
-            </GlassCard>
-          ))}
+            );
+          })}
         </div>
+      )}
+
+      {historyCustomer && (
+        <CustomerHistoryPanel customer={historyCustomer} onClose={() => setHistoryCustomer(null)} />
       )}
 
       {/* Create/Edit Modal */}

@@ -39,9 +39,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     .totals .row.total { font-size: 16px; font-weight: 700; color: #000; border-top: 2px solid #000; padding-top: 4px; margin-top: 3px; }
     .returns-policy { margin-top: 10px; text-align: center; }
     .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
-    .returns-policy .thanks { margin-top: 4px; font-weight: 700; text-transform: none; color: #000; }
-    .returns-policy .meta-time { margin-top: 6px; font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; white-space: nowrap; }
-    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
+    .returns-policy .thanks { margin-top: 4px; font-weight: 700; text-transform: none; color: #000; }    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
     .print-btn:hover { background: #333; }
     @media print {
       @page { size: 80mm auto; margin: 0; }
@@ -99,7 +97,6 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     <div class="returns-policy">
       <p>NO RETURN, NO REFUND. EXCHANGE ONLY IN 7 DAYS WITH VALID PROOF OF PURCHASE.<br>ITEM SHOULD BE ORIGINAL PACKING &amp; RESALABLE</p>
       <p class="thanks">Thanks for shopping with us!</p>
-      <p class="meta-time">${saleStamp}</p>
     </div>
   </div>
 

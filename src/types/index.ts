@@ -115,6 +115,25 @@ export interface SaleItem {
   created_at: string;
 }
 
+// A line of a re-order handed from the Customers tab to the POS. Only the
+// product reference and quantity travel — the POS resolves them against the
+// live product list so prices and stock are always current.
+export interface StagedOrderLine {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+}
+
+export interface StagedOrder {
+  customer_id: string;
+  customer_name: string;
+  // Where the lines came from, shown in the POS banner (e.g. an invoice number).
+  source: string;
+  // Whether the staged lines replace the current cart or are added to it.
+  mode: 'replace' | 'merge';
+  lines: StagedOrderLine[];
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;

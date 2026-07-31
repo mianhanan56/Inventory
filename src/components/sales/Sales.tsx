@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { usePersistentState } from '../../hooks/usePersistentState';
+import { clearStagedOrder, readStagedOrder, resolveStagedOrder } from '../../lib/posCart';
 import { Product, Customer, CartItem, Sale } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
 import {
   Search, ShoppingCart, Plus, Minus, CreditCard,
-  Banknote, Receipt, Eye, X, Package, Printer, Check, Trash2,
+  Banknote, Receipt, Eye, X, Package, Printer, Check, Trash2, RotateCcw,
 } from 'lucide-react';
 
 export default function Sales() {
@@ -26,6 +27,15 @@ export default function Sales() {
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'pos' | 'history'>('pos');
   const [saleDetail, setSaleDetail] = useState<Sale | null>(null);
+  // Set when this screen was entered by re-ordering from the Customers tab —
+  // drives the banner that says which purchase the cart came from.
+  const [reorderInfo, setReorderInfo] = useState<{
+    customerName: string;
+    source: string;
+    added: number;
+    unavailable: string[];
+    clamped: { name: string; requested: number; added: number }[];
+  } | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -41,7 +51,10 @@ export default function Sales() {
     setCustomers(custRes.data || []);
     setSales(salesRes.data || []);
     // Refresh the product snapshot held by a restored cart (price, stock) while
-    // keeping the user's edited unit prices and quantities untouched.
+    // keeping the user's edited unit prices and quantities untouched. This must
+    // stay a functional update: StrictMode runs the mount effect twice, and a
+    // value captured from the render closure would be stale on the second pass
+    // and wipe a cart the first pass had just filled.
     setCart(prev => prev.map(item => {
       const fresh = freshProducts.find(p => p.id === item.product.id);
       return fresh ? { ...item, product: fresh } : item;
@@ -49,10 +62,62 @@ export default function Sales() {
     setLoading(false);
   }
 
+  // A re-order handed over from the Customers tab is applied once products are
+  // loaded, so it resolves against live prices and stock. The ref makes it a
+  // one-shot: re-running this effect (StrictMode, later cart edits) is a no-op.
+  const stagedApplied = useRef(false);
+  useEffect(() => {
+    if (loading || stagedApplied.current) return;
+    stagedApplied.current = true;
+
+    const staged = readStagedOrder();
+    if (!staged) return;
+    clearStagedOrder();
+
+    const base = staged.mode === 'merge' ? cart : [];
+    const resolved = resolveStagedOrder(
+      staged.lines,
+      products,
+      productId => base.find(item => item.product.id === productId)?.quantity ?? 0
+    );
+
+    // Adding a product that is already on a line bumps that line's quantity
+    // rather than creating a duplicate one.
+    const merged = [...base];
+    for (const item of resolved.items) {
+      const existing = merged.findIndex(m => m.product.id === item.product.id);
+      if (existing >= 0) {
+        merged[existing] = { ...merged[existing], quantity: merged[existing].quantity + item.quantity };
+      } else {
+        merged.push(item);
+      }
+    }
+
+    setCart(merged);
+    setReorderInfo({
+      customerName: staged.customer_name,
+      source: staged.source,
+      added: resolved.items.length,
+      unavailable: resolved.unavailable,
+      clamped: resolved.clamped,
+    });
+    setViewMode('pos');
+  }, [loading, cart, products, setCart]);
+
   function clearCart() {
     setCart([]);
     setSelectedCustomer('');
     setNotes('');
+    setReorderInfo(null);
+  }
+
+  // "Start a new purchase instead" on the re-order banner: drop the items that
+  // came from history but stay on the same customer — picking different items
+  // for the same person is exactly what that button is for.
+  function startFreshPurchase() {
+    setCart([]);
+    setNotes('');
+    setReorderInfo(null);
   }
 
   // Clicking a product card toggles it: first click selects it (adds one to the
@@ -254,6 +319,39 @@ export default function Sales() {
         </div>
       </div>
 
+      {/* Entered from a customer's purchase history — say so, and offer a one
+          click way out of the re-order into a plain new sale. */}
+      {viewMode === 'pos' && reorderInfo && (
+        <div className="bg-gold-500/10 border border-gold-500/30 rounded-2xl px-4 py-3 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <RotateCcw className="w-5 h-5 text-gold-500 shrink-0 mt-0.5" />
+            <div className="text-sm min-w-0">
+              <p className="text-black font-medium">
+                Reordering for {reorderInfo.customerName} — {reorderInfo.added} item{reorderInfo.added === 1 ? '' : 's'} from {reorderInfo.source}
+              </p>
+              {reorderInfo.clamped.map(c => (
+                <p key={c.name} className="text-navy-400 text-xs mt-0.5">
+                  {c.name}: only {c.added} of {c.requested} added — limited stock
+                </p>
+              ))}
+              {reorderInfo.unavailable.length > 0 && (
+                <p className="text-red-600 text-xs mt-0.5">
+                  Not added (unavailable or out of stock): {reorderInfo.unavailable.join(', ')}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={startFreshPurchase} className="text-xs font-medium text-navy-300 hover:text-black px-3 py-1.5 rounded-lg transition">
+              Start a new purchase instead
+            </button>
+            <button onClick={() => setReorderInfo(null)} className="text-navy-400 hover:text-black transition p-1" title="Dismiss">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {viewMode === 'pos' ? (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           {/* Product Search & List */}
@@ -316,8 +414,10 @@ export default function Sales() {
 
           {/* Cart */}
           <div className="space-y-4">
-            <GlassCard className="sticky top-4">
-              <div className="flex items-center justify-between mb-4">
+            {/* Capped to the viewport and laid out as a column so the totals and
+                Complete Sale button stay on screen — only the item list scrolls. */}
+            <GlassCard className="sticky top-4 flex flex-col max-h-[calc(100vh-2rem)]">
+              <div className="flex items-center justify-between mb-4 shrink-0">
                 <h3 className="text-black font-semibold flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-gold-400" />
                   Cart ({cart.length} items)
@@ -333,7 +433,7 @@ export default function Sales() {
                 )}
               </div>
 
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+              <div className="space-y-3 flex-1 min-h-0 overflow-y-auto pr-1">
                 {cart.length === 0 && (
                   <p className="text-navy-400 text-sm text-center py-8">Cart is empty</p>
                 )}
@@ -394,7 +494,7 @@ export default function Sales() {
               </div>
 
               {cart.length > 0 && (
-                <div className="border-t border-navy-700/50 mt-4 pt-4 space-y-3">
+                <div className="border-t border-navy-700/50 mt-4 pt-4 space-y-3 shrink-0">
                   <div>
                     <label className="block text-navy-300 text-xs mb-1">Customer</label>
                     <select value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)} className="w-full px-3 py-2 bg-navy-700/50 border border-navy-600/30 rounded-xl text-black text-sm focus:outline-none focus:border-gold-500/50">
