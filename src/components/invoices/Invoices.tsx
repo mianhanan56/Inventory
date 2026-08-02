@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Sale, SaleItem, Customer } from '../../types';
-import { generateInvoiceHTML, printInvoice } from '../../lib/invoices';
+import { RECEIPT_PREVIEW_WIDTH_PX, generateInvoiceHTML, printInvoiceWithAlert } from '../../lib/invoices';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
 import Modal from '../ui/Modal';
@@ -121,9 +121,9 @@ export default function Invoices() {
     setInvoiceItems(items);
   }
 
-  function printManual(m: ManualInvoice) {
+  async function printManual(m: ManualInvoice) {
     const { sale, items } = buildManualSale(m);
-    printInvoice(sale, items);
+    await printInvoiceWithAlert(sale, items);
   }
 
   function downloadManual(m: ManualInvoice) {
@@ -152,8 +152,8 @@ export default function Invoices() {
   async function handlePrint(sale: Sale) {
     setActionLoading(sale.id);
     const items = await loadSaleItems(sale);
+    await printInvoiceWithAlert(sale, items);
     setActionLoading(null);
-    printInvoice(sale, items);
   }
 
   function downloadHtml(sale: Sale, items: SaleItem[]) {
@@ -311,16 +311,18 @@ export default function Invoices() {
                 <button onClick={() => downloadHtml(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-gold-500 hover:bg-gold-600 text-black rounded-lg text-sm font-medium transition">
                   <Download className="w-4 h-4" /> Download
                 </button>
-                <button onClick={() => printInvoice(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-navy-600 hover:bg-navy-500 rounded-lg text-sm font-medium transition">
+                <button onClick={() => printInvoiceWithAlert(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-navy-600 hover:bg-navy-500 rounded-lg text-sm font-medium transition">
                   <Printer className="w-4 h-4" /> Print
                 </button>
                 <button onClick={() => setSelectedSale(null)} className="p-1.5 hover:bg-navy-600 rounded-lg transition">X</button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto bg-navy-700 py-4">
+              {/* Fixed at the 80mm reference width so the preview matches the slip. */}
               <iframe
                 srcDoc={generateInvoiceHTML(selectedSale, invoiceItems)}
-                className="w-full h-full min-h-[600px]"
+                style={{ width: RECEIPT_PREVIEW_WIDTH_PX }}
+                className="mx-auto h-full min-h-[600px] bg-white shadow"
                 title="Invoice Preview"
               />
             </div>

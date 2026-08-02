@@ -1,109 +1,245 @@
-import { Sale, SaleItem } from '../types';
-import { LOGO_DATA_URI } from './logo';
+import { Sale, SaleItem } from "../types";
+import { LOGO_DATA_URI } from "./logo";
+import {
+  PAPER_WIDTH_MM,
+  PrintReceiptResult,
+  describePrintError,
+  printReceiptHtml,
+} from "./qz";
+
+/**
+ * Reference width, in CSS pixels, that the receipt stylesheet is designed
+ * against (80mm at 96dpi). Use it for on-screen previews so the preview and
+ * the printed slip look identical.
+ */
+export const RECEIPT_PREVIEW_WIDTH_PX = 302;
 
 export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
-  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (v: number) =>
+    `R ${v.toLocaleString("en-ZA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
-  // Actual sale timestamp; falls back to now for a sale not yet persisted.
   const stamp = sale.created_at ? new Date(sale.created_at) : new Date();
-  const saleDate = stamp.toLocaleDateString('en-ZA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const saleTime = stamp.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  const saleDate = stamp.toLocaleDateString("en-ZA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const saleTime = stamp.toLocaleTimeString("en-ZA", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
   const saleStamp = `Date: ${saleDate} | Time: ${saleTime}`;
 
-  return `<!DOCTYPE html>
+  return `
+<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <title>Invoice ${sale.invoice_number}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; background: #fff; line-height: 1.2; font-weight: 450; }
-    .invoice { max-width: 800px; margin: 0 auto; padding: 20px 2px 2px; }
-    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-    .company-info .logo { height: 60px; width: auto; margin-bottom: 4px; display: block; margin-left: auto; margin-right: auto; }
-    .company-info h1 { color: #000; font-size: 24px; font-weight: 700; }
-    .company-info p { color: #000; font-size: 12px; margin-top: 2px; }
-    .company-info .meta-date { font-size: 12px; margin-top: 4px; white-space: nowrap; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
-    thead th { background: #fff; color: #000; padding: 4px 2px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0; border-bottom: 2px solid #000; word-wrap: break-word; overflow-wrap: break-word; }
-    thead th:last-child, thead th:nth-child(n+3) { text-align: right; }
-    tbody td { padding: 4px 2px; font-size: 13px; word-wrap: break-word; overflow-wrap: break-word; }
-    tbody td:last-child, tbody td:nth-child(n+3) { text-align: right; }
-    th:nth-child(1), td:nth-child(1) { width: 32%; }
-    th:nth-child(2), td:nth-child(2) { width: 9%; }
-    th:nth-child(3), td:nth-child(3) { width: 24%; }
-    th:nth-child(4), td:nth-child(4) { width: 14%; }
-    th:nth-child(5), td:nth-child(5) { width: 21%; }
-    .totals { margin-left: auto; width: 100%; }
-    .totals .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; color: #000; }
-    .totals .row.total { font-size: 16px; font-weight: 700; color: #000; border-top: 2px solid #000; padding-top: 4px; margin-top: 3px; }
-    .returns-policy { margin-top: 10px; text-align: center; }
-    .returns-policy p { font-size: 12px; font-weight: 600; color: #000; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
-    .returns-policy .thanks { margin-top: 4px; font-weight: 700; text-transform: none; color: #000; }    .print-btn { position: fixed; bottom: 20px; right: 20px; background: #000; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999; }
-    .print-btn:hover { background: #333; }
-    /* Fallback page box. The inline script below replaces this with an
-       explicit 80mm x <measured>mm page so the receipt is always ONE slip:
-       Chrome treats "auto" height as "use the paper size from the print
-       dialog", which is what splits long receipts onto extra pages. */
-    @page { size: 80mm auto; margin: 0; }
 
-    @media print {
-      html, body {
-        width: 80mm;
-        height: auto;
-        min-height: 0;
-        max-height: none;
-        margin: 0;
-        padding: 0;
-        overflow: visible;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .print-btn { display: none !important; }
-      /* 80mm roll: printable area is ~72mm, ~4mm non-printable each side.
-         Content is 72mm centred so nothing is clipped on the right edge. */
-      .invoice {
-        width: 72mm;
-        max-width: none;
-        height: auto;
-        min-height: 0;
-        max-height: none;
-        margin: 0 auto;
-        padding: 4mm 0 3mm;
-        overflow: visible;
-      }
-      /* Never split a line item, a total row or the footer across pages. */
-      table, thead, tbody, tr, td, th,
-      .header, .totals, .totals .row, .returns-policy {
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-      /* Nothing in a receipt may force a new page. */
-      * {
-        page-break-before: auto;
-        page-break-after: auto;
-        break-before: auto;
-        break-after: auto;
-      }
-      /* A repeated table header would only appear if the content overflowed a
-         page; keep it as a plain row group so it can never be duplicated. */
-      thead { display: table-row-group; }
+<head>
+  <meta charset="UTF-8" />
+  <title>Invoice ${sale.invoice_number}</title>
+
+  <style>
+    /*
+      Sized in CSS pixels against a 302px reference width (80mm at 96dpi) -
+      the same numbers the original design used. Typography is scoped to
+      .invoice rather than body, so the receipt renders identically whether it
+      is laid out as a document or rasterised inside an SVG foreignObject,
+      where body/html rules and rem units do not apply.
+    */
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #fff;
+    }
+
+    img {
+      max-width: 100%;
+    }
+
+    .invoice {
+      /* 72mm of content on the 80mm roll, centred. */
+      width: 72mm;
+      margin: 0 auto;
+      padding: 11px 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #000;
+      background: #fff;
+      line-height: 1.2;
+      font-weight: 450;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+    }
+
+    .company-info .logo {
+      height: 60px;
+      width: auto;
+      margin-bottom: 4px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .company-info h1 {
+      color: #000;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .company-info p {
+      color: #000;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .company-info .meta-date {
+      font-size: 12px;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 8px;
+      table-layout: fixed;
+    }
+
+    thead th {
+      background: #fff;
+      color: #000;
+      padding: 4px 2px;
+      text-align: left;
+      font-size: 12px;
+      text-transform: uppercase;
+      border-bottom: 2px solid #000;
+      overflow-wrap: break-word;
+    }
+
+    thead th:last-child,
+    thead th:nth-child(n + 3) {
+      text-align: right;
+    }
+
+    tbody td {
+      padding: 4px 2px;
+      font-size: 13px;
+      overflow-wrap: break-word;
+    }
+
+    tbody td:last-child,
+    tbody td:nth-child(n + 3) {
+      text-align: right;
+    }
+
+    th:nth-child(1),
+    td:nth-child(1) {
+      width: 32%;
+    }
+
+    th:nth-child(2),
+    td:nth-child(2) {
+      width: 9%;
+    }
+
+    th:nth-child(3),
+    td:nth-child(3) {
+      width: 24%;
+    }
+
+    th:nth-child(4),
+    td:nth-child(4) {
+      width: 14%;
+    }
+
+    th:nth-child(5),
+    td:nth-child(5) {
+      width: 21%;
+    }
+
+    .totals {
+      width: 100%;
+      margin-left: auto;
+    }
+
+    .totals .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+      font-size: 13px;
+    }
+
+    .totals .row.total {
+      font-size: 16px;
+      font-weight: 700;
+      border-top: 2px solid #000;
+      padding-top: 4px;
+      margin-top: 3px;
+    }
+
+    .returns-policy {
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .returns-policy p {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    .returns-policy .thanks {
+      margin-top: 4px;
+      font-weight: 700;
+      text-transform: none;
     }
   </style>
 </head>
+
 <body>
+
   <div class="invoice">
+
     <div class="header">
       <div class="company-info">
-        <img class="logo" src="${LOGO_DATA_URI}" alt="ON TARGET UNITED logo" />
+
+        <img
+          class="logo"
+          src="${LOGO_DATA_URI}"
+          alt="ON TARGET UNITED logo"
+        />
+
         <h1>ON TARGET UNITED</h1>
+
         <p>BLOCK C SHOP # 74 CHINA MALL, SPRINGFIELD, DURBAN</p>
+
         <p>Tel: 078 863 8987 | 067 606 1458</p>
+
         <p class="meta-date">${saleStamp}</p>
+
       </div>
     </div>
 
     <table>
+
       <thead>
         <tr>
           <th>Description</th>
@@ -113,8 +249,12 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
           <th>Line Total</th>
         </tr>
       </thead>
+
       <tbody>
-        ${items.map(item => `
+
+        ${items
+          .map(
+            (item) => `
           <tr>
             <td>${item.product_name}</td>
             <td>${item.quantity}</td>
@@ -122,70 +262,99 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
             <td>${item.vat_rate}%</td>
             <td>${fmt(item.line_total)}</td>
           </tr>
-        `).join('')}
+        `,
+          )
+          .join("")}
+
       </tbody>
+
     </table>
 
     <div class="totals">
-      <div class="row"><span>Subtotal</span><span>${fmt(Number(sale.subtotal))}</span></div>
-      <div class="row"><span>VAT</span><span>${fmt(Number(sale.vat_total))}</span></div>
-      ${Number(sale.discount_total) > 0 ? `<div class="row"><span>Discount</span><span>-${fmt(Number(sale.discount_total))}</span></div>` : ''}
-      <div class="row total"><span>Total</span><span>${fmt(Number(sale.total))}</span></div>
+
+      <div class="row">
+        <span>Subtotal</span>
+        <span>${fmt(Number(sale.subtotal))}</span>
+      </div>
+
+      <div class="row">
+        <span>VAT</span>
+        <span>${fmt(Number(sale.vat_total))}</span>
+      </div>
+
+      ${
+        Number(sale.discount_total) > 0
+          ? `
+        <div class="row">
+          <span>Discount</span>
+          <span>-${fmt(Number(sale.discount_total))}</span>
+        </div>
+      `
+          : ""
+      }
+
+      <div class="row total">
+        <span>Total</span>
+        <span>${fmt(Number(sale.total))}</span>
+      </div>
+
     </div>
 
     <div class="returns-policy">
-      <p>NO RETURN, NO REFUND. EXCHANGE ONLY IN 7 DAYS WITH VALID PROOF OF PURCHASE.<br>ITEM SHOULD BE ORIGINAL PACKING &amp; RESALABLE</p>
-      <p class="thanks">Thanks for shopping with us!</p>
+
+      <p>
+        NO RETURN, NO REFUND. EXCHANGE ONLY IN 7 DAYS WITH VALID
+        PROOF OF PURCHASE.
+        <br />
+        ITEM SHOULD BE ORIGINAL PACKING &amp; RESALABLE
+      </p>
+
+      <p class="thanks">
+        Thanks for shopping with us!
+      </p>
+
     </div>
+
   </div>
 
-  <button class="print-btn" onclick="window.print()">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:6px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-    Print Invoice
-  </button>
-
-  <script>
-    (function () {
-      var pageStyle = document.createElement('style');
-      document.head.appendChild(pageStyle);
-
-      // Measure the rendered receipt and pin @page to exactly that height, so
-      // the browser has a single page tall enough for all the content.
-      function sizePage() {
-        var invoice = document.querySelector('.invoice');
-        if (!invoice) return;
-        var px = Math.max(
-          invoice.getBoundingClientRect().height,
-          invoice.scrollHeight,
-          document.body.scrollHeight
-        );
-        // CSS px -> mm (96 px per inch), plus a small tail so a rounding
-        // error can never spill one stray line onto a second page.
-        var mm = Math.ceil((px * 25.4) / 96) + 5;
-        pageStyle.textContent = '@page { size: 80mm ' + mm + 'mm; margin: 0; }';
-      }
-
-      window.addEventListener('load', sizePage);
-      // Fonts/logo can settle after load and change the height.
-      if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizePage);
-      // Last chance: re-measure right before the print dialog opens.
-      window.addEventListener('beforeprint', sizePage);
-      sizePage();
-    })();
-  </script>
 </body>
-</html>`;
+
+</html>
+`;
 }
 
-export function openInvoiceWindow(sale: Sale, items: SaleItem[]) {
-  const html = generateInvoiceHTML(sale, items);
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
+/**
+ * Print an invoice directly to the 80mm thermal printer through QZ Tray.
+ * No browser print dialog is involved. Rejects with a QzError the caller can
+ * surface to the cashier.
+ */
+export function printInvoice(
+  sale: Sale,
+  items: SaleItem[],
+  options: { printerName?: string } = {},
+): Promise<PrintReceiptResult> {
+  return printReceiptHtml(generateInvoiceHTML(sale, items), {
+    printerName: options.printerName,
+    jobName: `Invoice ${sale.invoice_number}`,
+  });
+}
+
+/**
+ * printInvoice for the plain buttons that have no error UI of their own: the
+ * cashier gets an alert instead of a silently dropped receipt. Screens with
+ * richer feedback should use printInvoice / useThermalPrinter directly.
+ */
+export async function printInvoiceWithAlert(
+  sale: Sale,
+  items: SaleItem[],
+): Promise<boolean> {
+  try {
+    await printInvoice(sale, items);
+    return true;
+  } catch (err) {
+    alert(`Could not print invoice ${sale.invoice_number}:\n${describePrintError(err)}`);
+    return false;
   }
 }
 
-export function printInvoice(sale: Sale, items: SaleItem[]) {
-  openInvoiceWindow(sale, items);
-}
+export { PAPER_WIDTH_MM };

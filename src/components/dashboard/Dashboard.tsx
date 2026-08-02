@@ -306,8 +306,8 @@ export default function Dashboard() {
                       onClick={async () => {
                         const { data } = await supabase.from('sale_items').select('*').eq('sale_id', sale.id);
                         const items = data || [];
-                        const { printInvoice } = await import('../../lib/invoices');
-                        printInvoice({ ...sale, sale_items: items }, items);
+                        const { printInvoiceWithAlert } = await import('../../lib/invoices');
+                        await printInvoiceWithAlert({ ...sale, sale_items: items }, items);
                       }}
                       className="p-1 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded transition"
                       title="Print Invoice"
