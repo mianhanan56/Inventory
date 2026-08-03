@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Sale, SaleItem } from '../types';
-import { IS_LOCAL_TEST, printInvoice } from '../lib/invoices';
+import { printInvoice } from '../lib/invoices';
 import {
   connect,
   describePrintError,
@@ -33,17 +33,6 @@ export function useThermalPrinter({ autoConnect = true } = {}) {
   }, []);
 
   const refresh = useCallback(async () => {
-    // LOCAL TESTING ONLY: no QZ Tray on a dev machine, so skip the handshake
-    // and report ready - printing goes through the browser preview instead.
-    if (IS_LOCAL_TEST) {
-      setPrinters([]);
-      setPrinter('Browser preview (local test)');
-      setError(null);
-      setStatus('ready');
-      return;
-    }
-
-    // PRODUCTION: connect to QZ Tray and detect the thermal printer.
     setStatus('connecting');
     setError(null);
     try {
@@ -99,8 +88,7 @@ export function useThermalPrinter({ autoConnect = true } = {}) {
 
   return {
     status,
-    // LOCAL TESTING ONLY: the browser preview is always "connected".
-    connected: IS_LOCAL_TEST || isConnected(),
+    connected: isConnected(),
     printer,
     printers,
     preferredPrinter: getPreferredPrinter(),
