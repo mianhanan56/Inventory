@@ -82,15 +82,20 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     }
 
     .invoice {
-      /* 72mm of content on the 80mm roll, centred. */
-      width: 72mm;
+      /* 78mm of content on the 80mm roll, centred - a tiny gap each side. */
+      width: 78mm;
       margin: 0 auto;
       padding: 11px 0;
-      font-family: 'Segoe UI', Arial, sans-serif;
+      /* The only side margin: keeps text off the very edge of the paper. */
+      font-family: Arial, sans-serif;
       color: #000;
       background: #fff;
       line-height: 1.2;
-      font-weight: 450;
+      /* Crisper glyphs on a thermal head than a heavier weight would give:
+         no anti-aliasing to smear, and exact glyph geometry. */
+      font-weight: 500;
+      text-rendering: geometricPrecision;
+      -webkit-font-smoothing: none;
     }
 
     .header {
@@ -139,7 +144,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       color: #000;
       padding: 4px 2px;
       text-align: left;
-      font-size: 12px;
+      font-size: 13px;
       text-transform: uppercase;
       border-bottom: 2px solid #000;
       overflow-wrap: break-word;
@@ -152,7 +157,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
     tbody td {
       padding: 4px 2px;
-      font-size: 13px;
+      font-size: 14px;
       overflow-wrap: break-word;
     }
 
@@ -382,7 +387,7 @@ async function whenAssetsSettled(doc: Document): Promise<void> {
  * pins the page itself to the paper roll:
  *
  *   - the document is exactly 80mm wide on screen and on paper, so the .invoice
- *     block inside it keeps the same 72mm width, spacing and table layout as
+ *     block inside it keeps the same 78mm width, spacing and table layout as
  *     the printed slip;
  *   - no page margins, so nothing is inset and no browser header/footer band
  *     is reserved.
