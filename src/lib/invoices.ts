@@ -15,16 +15,22 @@ import {
 export const RECEIPT_PREVIEW_WIDTH_PX = 302;
 
 /* ══════════════════════════════════════════════════════════════════════════
-   LOCAL TESTING SWITCH  ---  TEMPORARY
+   LOCAL TESTING SWITCH
    ──────────────────────────────────────────────────────────────────────────
    true  -> receipts open in a new browser tab and go through window.print().
             For development machines that have no thermal printer / no QZ Tray.
-   false -> production behavior: the untouched QZ Tray path in ./qz.ts prints
-            straight to the 80mm thermal printer with no dialog.
+   false -> production behavior: the QZ Tray path in ./qz.ts prints straight to
+            the 80mm thermal printer with no dialog.
 
-   Set this back to false before shipping to the client.
+   Tied to the build mode rather than hand-edited. It was previously a literal
+   `true`, which shipped to the client: every receipt went through Chrome's
+   print path instead of QZ Tray, and Chrome sizes the page from a screen
+   measurement that a long receipt's print layout can exceed - one fraction of
+   a millimetre over and the slip spills onto a second page, which on a 60-item
+   receipt is half a metre of blank paper. `vite build` sets DEV to false, so a
+   production bundle can no longer take that path.
    ══════════════════════════════════════════════════════════════════════════ */
-export const IS_LOCAL_TEST = true;
+export const IS_LOCAL_TEST = import.meta.env.DEV;
 
 export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   const fmt = (v: number) =>
@@ -355,6 +361,19 @@ const PX_PER_MM = 96 / 25.4;
  */
 const PREVIEW_HEIGHT_TOLERANCE_MM = 0.5;
 
+/**
+ * Extra slack as a share of the content height.
+ *
+ * The flat tolerance above is not enough on its own: the height is measured off
+ * the screen layout, and Chrome lays the receipt out again at printer
+ * resolution when it paginates. Every line box it rounds up there adds to a
+ * total the screen layout never saw, so the discrepancy grows with the number
+ * of rows - ample for a 3-item slip, short for a 40-item one. Falling short by
+ * any amount costs a whole extra page, and that page is as tall as the receipt
+ * (~490mm at 60 items), so the cushion has to scale with the content too.
+ */
+const PREVIEW_HEIGHT_TOLERANCE_RATIO = 0.01;
+
 /** Name reported back to the UI in place of a real printer. */
 const PREVIEW_PRINTER_LABEL = 'Browser preview (local test)';
 
@@ -429,7 +448,9 @@ function measurePreviewHeightMm(doc: Document): number {
   );
 
   if (!heightPx) throw new Error('Measured receipt height was zero');
-  return heightPx / PX_PER_MM + PREVIEW_HEIGHT_TOLERANCE_MM;
+
+  const contentMm = heightPx / PX_PER_MM;
+  return contentMm * (1 + PREVIEW_HEIGHT_TOLERANCE_RATIO) + PREVIEW_HEIGHT_TOLERANCE_MM;
 }
 
 function injectStyle(doc: Document, css: string): void {
@@ -526,6 +547,7 @@ export function printInvoice(
       printer: PREVIEW_PRINTER_LABEL,
       heightMm,
       cut: false,
+      renderer: 'preview' as const,
     }));
   }
 

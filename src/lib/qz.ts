@@ -33,6 +33,35 @@ const RENDER_SCALE = RENDER_DPI / 96;
 const HEIGHT_TOLERANCE_MM = 0.5;
 
 /**
+ * Further slack for that same fallback, as a share of the content height.
+ *
+ * The two renderers disagree per line box, not per receipt, so the gap between
+ * the height measured here and the height QZ actually lays out grows with the
+ * number of rows: a flat 0.5mm covers a short slip and comes up short on a long
+ * one. Undershooting pushes the tail onto a second page as tall as the receipt
+ * itself, so a couple of millimetres of blank paper is the cheaper mistake.
+ * Only the fallback needs this - the bitmap path prints the very image it
+ * measured, so there is no second engine to disagree with.
+ */
+const HEIGHT_TOLERANCE_RATIO = 0.02;
+
+/**
+ * Largest canvas edge Chrome will allocate. A receipt with a few hundred lines
+ * reaches it at 203dpi, and the failure matters: renderReceiptBitmap() would
+ * throw on exactly the long receipts that need it most, dropping them into the
+ * HTML fallback above - the path whose text metrics leave the blank tail.
+ * Rasterising a very long slip slightly below the head's native density is a
+ * far better trade than losing the exact-height guarantee.
+ */
+const MAX_CANVAS_EDGE_PX = 16384;
+
+/**
+ * Safety buffer under the bitmap, in millimetres, so the cut never clips the
+ * last line. Two dots at 203dpi - small enough to read as no gap at all.
+ */
+const BITMAP_HEIGHT_BUFFER_MM = 0.5;
+
+/**
  * Cut the paper immediately after the last line of the receipt.
  *
  * The command goes out as a raw follow-up job to the same printer the slip was
@@ -453,7 +482,8 @@ function contentHeightPx(doc: Document): number {
 export async function measureReceiptHeightMm(html: string, widthMm = PAPER_WIDTH_MM): Promise<number> {
   try {
     const heightPx = await withReceiptDocument(html, contentHeightPx);
-    return (heightPx / MEASURE_WIDTH_PX) * widthMm + HEIGHT_TOLERANCE_MM;
+    const contentMm = (heightPx / MEASURE_WIDTH_PX) * widthMm;
+    return contentMm * (1 + HEIGHT_TOLERANCE_RATIO) + HEIGHT_TOLERANCE_MM;
   } catch (err) {
     throw new QzError('measure-failed', 'Could not work out the receipt height before printing.', err);
   }
@@ -514,9 +544,18 @@ export async function renderReceiptBitmap(html: string, widthMm = PAPER_WIDTH_MM
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
 
+  // Native head density, unless the receipt is so long that 203dpi would take
+  // the canvas past what Chrome can allocate. Dropping the density keeps the
+  // exact-height guarantee; throwing here would forfeit it.
+  const scale = Math.min(
+    RENDER_SCALE,
+    MAX_CANVAS_EDGE_PX / heightPx,
+    MAX_CANVAS_EDGE_PX / MEASURE_WIDTH_PX,
+  );
+
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(MEASURE_WIDTH_PX * RENDER_SCALE);
-  canvas.height = Math.round(heightPx * RENDER_SCALE);
+  canvas.width = Math.round(MEASURE_WIDTH_PX * scale);
+  canvas.height = Math.round(heightPx * scale);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas is unavailable');
@@ -526,13 +565,17 @@ export async function renderReceiptBitmap(html: string, widthMm = PAPER_WIDTH_MM
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
- return {
-  base64: canvas.toDataURL('image/png').split(',')[1],
-  widthPx: canvas.width,
-  heightPx: canvas.height,
-  // 0.5mm safety buffer taake last line cut na ho
-  heightMm: (canvas.height / canvas.width) * widthMm + 0.5,
-};
+  const base64 = canvas.toDataURL('image/png').split(',')[1];
+  if (!base64) throw new Error('Receipt bitmap could not be encoded');
+
+  return {
+    base64,
+    widthPx: canvas.width,
+    heightPx: canvas.height,
+    // The page is the image: height comes from the bitmap's own aspect ratio,
+    // so no second layout engine can disagree about where the receipt ends.
+    heightMm: (canvas.height / canvas.width) * widthMm + BITMAP_HEIGHT_BUFFER_MM,
+  };
 }
 
 export interface PrintReceiptOptions {
@@ -547,11 +590,23 @@ export interface PrintReceiptOptions {
   autoCut?: boolean;
 }
 
+/**
+ * Which engine produced the slip:
+ *
+ *   bitmap  - browser raster, page height taken from the image. Exact.
+ *   html    - QZ rendered the markup itself. Height is an estimate, so a blank
+ *             tail is possible; seeing this in the field means the bitmap path
+ *             failed and the warning it logged is worth reading.
+ *   preview - not printed at all, just Chrome's print dialog (IS_LOCAL_TEST).
+ */
+export type PrintRenderer = 'bitmap' | 'html' | 'preview';
+
 export interface PrintReceiptResult {
   printer: string;
   heightMm: number;
   /** True when the paper was cut right after the last line. */
   cut: boolean;
+  renderer: PrintRenderer;
 }
 
 /**
@@ -593,6 +648,7 @@ async function runPrintJob(
   const jobName = options.jobName ?? 'Receipt';
 
   let heightMm: number;
+  let renderer: PrintRenderer;
   let config: ReturnType<typeof receiptConfig>;
   let payload: { type: 'pixel'; format: 'image' | 'html'; flavor: 'base64' | 'plain'; data: string };
 
@@ -601,14 +657,21 @@ async function runPrintJob(
     // derived from the very bitmap being printed - no blank tail is possible.
     const raster = await renderReceiptBitmap(html, PAPER_WIDTH_MM);
     heightMm = raster.heightMm;
+    renderer = 'bitmap';
     config = receiptConfig(printer, heightMm, jobName);
     config.reconfigure({ rasterize: true });
     payload = { type: 'pixel', format: 'image', flavor: 'base64', data: raster.base64 };
   } catch (err) {
-    // Fallback: let QZ render the HTML. Vector output, still a single page,
-    // but its text metrics can leave a few millimetres at the bottom.
-    console.warn('Falling back to QZ-side HTML rendering for this receipt.', err);
+    // Fallback: let QZ render the HTML. Vector output, still a single page, but
+    // its text metrics are only an estimate of where the receipt ends - this is
+    // the path that can leave a blank tail, so it is worth knowing when it runs.
+    console.warn(
+      'Receipt rasterisation failed; falling back to QZ-side HTML rendering, ' +
+        'whose page height is an estimate and may leave a blank tail.',
+      err,
+    );
     heightMm = await measureReceiptHeightMm(html, PAPER_WIDTH_MM);
+    renderer = 'html';
     config = receiptConfig(printer, heightMm, jobName);
     config.reconfigure({ rasterize: false, scaleContent: false });
     payload = { type: 'pixel', format: 'html', flavor: 'plain', data: html };
@@ -624,7 +687,7 @@ async function runPrintJob(
   const shouldCut = options.autoCut ?? supportsAutoCut(printer);
   const cut = shouldCut ? await cutPaper(printer) : false;
 
-  return { printer, heightMm, cut };
+  return { printer, heightMm, cut, renderer };
 }
 
 /** Human-readable message for anything thrown by this module. */
