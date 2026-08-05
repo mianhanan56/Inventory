@@ -83,9 +83,9 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
     .invoice {
       /* 78mm of content on the 80mm roll, centred - a tiny gap each side. */
-      width: 78mm;
+      width: 95mm;
       margin: 0 auto;
-      padding: 11px 0;
+      padding: 11px 2mm;
       /* The only side margin: keeps text off the very edge of the paper. */
       font-family: Arial, sans-serif;
       color: #000;
