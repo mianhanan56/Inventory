@@ -1,36 +1,136 @@
 import { Sale, SaleItem } from "../types";
 import { LOGO_DATA_URI } from "./logo";
-import {
-  PAPER_WIDTH_MM,
-  PrintReceiptResult,
-  describePrintError,
-  printReceiptHtml,
-} from "./qz";
-
-/**
- * Reference width, in CSS pixels, that the receipt stylesheet is designed
- * against (80mm at 96dpi). Use it for on-screen previews so the preview and
- * the printed slip look identical.
- */
-export const RECEIPT_PREVIEW_WIDTH_PX = 302;
 
 /* ══════════════════════════════════════════════════════════════════════════
-   LOCAL TESTING SWITCH
-   ──────────────────────────────────────────────────────────────────────────
-   true  -> receipts open in a new browser tab and go through window.print().
-            For development machines that have no thermal printer / no QZ Tray.
-   false -> production behavior: the QZ Tray path in ./qz.ts prints straight to
-            the 80mm thermal printer with no dialog.
+   80mm THERMAL RECEIPT PRINTING
 
-   Tied to the build mode rather than hand-edited. It was previously a literal
-   `true`, which shipped to the client: every receipt went through Chrome's
-   print path instead of QZ Tray, and Chrome sizes the page from a screen
-   measurement that a long receipt's print layout can exceed - one fraction of
-   a millimetre over and the slip spills onto a second page, which on a 60-item
-   receipt is half a metre of blank paper. `vite build` sets DEV to false, so a
-   production bundle can no longer take that path.
+   Printing goes through the browser's own print path - no QZ Tray, no native
+   helper, nothing for the shop to install. The two things a browser normally
+   gets wrong on a receipt printer are handled here:
+
+     height  the receipt document measures itself and writes an @page rule as
+             tall as its own content, so the roll is cut right after the last
+             line and a long slip is never split across pages.
+     width   the content is a fixed 72mm block centred on an 80mm page, which
+             is the printable window of every common 80mm thermal head. Content
+             wider than that gets shrunk by the driver to fit, which is what
+             makes the text come out small and the layout look squeezed.
+
+   Both numbers live in the constants below. They are the only knobs worth
+   touching if a particular printer disagrees.
    ══════════════════════════════════════════════════════════════════════════ */
-export const IS_LOCAL_TEST = import.meta.env.DEV;
+
+/** Physical width of the paper roll, in millimetres. This is the page width. */
+export const PAPER_WIDTH_MM = 80;
+
+/**
+ * Width of the printed block, in millimetres.
+ *
+ * An 80mm roll is not 80mm of printable paper: the head covers 72mm (576 dots
+ * at 203dpi) and the rest is the dead margin the paper guides need. Laying the
+ * receipt out any wider than the head means the driver either clips the right
+ * edge or scales the whole page down to fit - the second is what produced the
+ * shrunken, off-centre slips.
+ */
+export const CONTENT_WIDTH_MM = 72;
+
+/** 1mm in CSS pixels at 96dpi - the browser's fixed conversion. */
+const PX_PER_MM = 96 / 25.4;
+
+/**
+ * Reference width in CSS pixels for on-screen previews (80mm at 96dpi), so a
+ * preview pane shows the slip at exactly the size it prints.
+ */
+export const RECEIPT_PREVIEW_WIDTH_PX = Math.round(PAPER_WIDTH_MM * PX_PER_MM);
+
+/**
+ * Width to give a frame that previews a receipt: the paper plus room for the
+ * frame's own vertical scrollbar. Sized to the paper exactly, a long receipt
+ * would gain a scrollbar, lose that much of its content area, and pick up a
+ * horizontal scrollbar as well.
+ */
+export const RECEIPT_PREVIEW_FRAME_WIDTH_PX = RECEIPT_PREVIEW_WIDTH_PX + 18;
+
+/**
+ * Slack added below the last line, in millimetres.
+ *
+ * The page is sized from the on-screen layout and Chrome lays the document out
+ * again to paginate it, so the two could in principle disagree. Measured across
+ * 1 to 120 items they do not: the gap under the last line stays constant to
+ * within half a millimetre, which is just the rounding up to whole millimetres.
+ * So this is a flat cushion, not a per-line one - a share of the content height
+ * would only spend paper in proportion to how long the receipt already is.
+ */
+const PAGE_TAIL_MM = 2;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RECEIPT DOCUMENT
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The self-sizing part of the receipt, inlined into the document.
+ *
+ * It has to live in the document rather than in the app: the same markup is
+ * printed from a hidden frame, shown in the preview pane, and downloaded as a
+ * standalone .html file, and only the document itself knows how tall it ended
+ * up in the browser that is about to print it.
+ *
+ * Only `.invoice` is measured. `document.body.scrollHeight` is never smaller
+ * than the viewport, so measuring the body would size the page to the window
+ * and print a mostly blank sheet.
+ *
+ * Alongside the `@page` rule it writes a print-only clamp, as a backstop for
+ * the day a browser lays the receipt out fractionally taller than it measured:
+ * the page box is already tall enough for the content, so anything past it can
+ * only be a sliver, and clipping a sliver beats spilling it onto a second slip
+ * as long as the receipt itself. Both selectors in that clamp are load-bearing
+ * - clamping `body` alone does not stop Chrome paginating, and clamping `html`
+ * alone does not either, while the pair does. The `max-height` on the receipt
+ * block is a second mechanism that holds on its own if the pair ever stops.
+ */
+function pageSizingScript(): string {
+  return `
+    (function () {
+      var PAPER_MM = ${PAPER_WIDTH_MM};
+      var TAIL_MM = ${PAGE_TAIL_MM};
+      var PX_PER_MM = 96 / 25.4;
+
+      var pageStyle = document.createElement('style');
+      pageStyle.id = 'receipt-page-size';
+      document.head.appendChild(pageStyle);
+
+      function sizePage() {
+        var receipt = document.querySelector('.invoice');
+        if (!receipt) return 0;
+
+        var px = Math.max(receipt.getBoundingClientRect().height, receipt.scrollHeight);
+        if (!px) return 0;
+
+        var page = Math.ceil(px / PX_PER_MM + TAIL_MM);
+
+        pageStyle.textContent =
+          '@page { size: ' + PAPER_MM + 'mm ' + page + 'mm; margin: 0; }' +
+          // One page, always.
+          '@media print {' +
+          '  html, body { height: ' + page + 'mm; overflow: hidden; }' +
+          '  .invoice { max-height: ' + page + 'mm; overflow: hidden; }' +
+          '}';
+
+        window.__receiptPageHeightMm = page;
+        return page;
+      }
+
+      window.__sizeReceiptPage = sizePage;
+
+      sizePage();
+      window.addEventListener('load', sizePage);
+      // The logo and any webfont settle after load and change the height.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(sizePage);
+      // Last chance, for a print triggered straight from the browser menu.
+      window.addEventListener('beforeprint', sizePage);
+    })();
+  `;
+}
 
 export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
   const fmt = (v: number) =>
@@ -65,11 +165,10 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
   <style>
     /*
-      Sized in CSS pixels against a 302px reference width (80mm at 96dpi) -
-      the same numbers the original design used. Typography is scoped to
-      .invoice rather than body, so the receipt renders identically whether it
-      is laid out as a document or rasterised inside an SVG foreignObject,
-      where body/html rules and rem units do not apply.
+      The receipt is laid out at its real paper size on screen as well as on
+      paper - no @media print rule changes any width. That is what makes the
+      measurement above trustworthy: the browser measures the very layout it
+      is about to print, so the page can be sized to it exactly.
     */
 
     * {
@@ -78,9 +177,14 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       box-sizing: border-box;
     }
 
+    html,
     body {
-      margin: 0;
+      /* The page itself: the full width of the roll. */
+      width: ${PAPER_WIDTH_MM}mm;
+      margin: 0 auto;
       background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     img {
@@ -88,12 +192,11 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     }
 
     .invoice {
-      /* 78mm of content on the 80mm roll, centred - a tiny gap each side. */
-      width: 95mm;
+      /* The printable window of an 80mm head, centred on the roll. */
+      width: ${CONTENT_WIDTH_MM}mm;
       margin: 0 auto;
-      padding: 11px 2mm;
-      /* The only side margin: keeps text off the very edge of the paper. */
-      font-family: Arial, sans-serif;
+      padding: 3mm 0;
+      font-family: Arial, Helvetica, sans-serif;
       color: #000;
       background: #fff;
       line-height: 1.2;
@@ -102,6 +205,34 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       font-weight: 500;
       text-rendering: geometricPrecision;
       -webkit-font-smoothing: none;
+    }
+
+    /*
+      Nothing inside the receipt may break across pages. Deliberately not
+      applied to .invoice itself: a block that carries break-inside:avoid and
+      still does not fit gets pushed whole onto the next page, which would
+      leave the first slip blank.
+    */
+    .header,
+    table,
+    thead,
+    tbody,
+    tr,
+    td,
+    th,
+    .totals,
+    .totals .row,
+    .returns-policy {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      break-before: auto;
+      break-after: auto;
+    }
+
+    /* A repeated column header could only appear on a spilled page; make the
+       head a plain row group so it can never be duplicated. */
+    thead {
+      display: table-row-group;
     }
 
     .header {
@@ -122,18 +253,18 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
     .company-info h1 {
       color: #000;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
     }
 
     .company-info p {
       color: #000;
-      font-size: 12px;
+      font-size: 11px;
       margin-top: 2px;
     }
 
     .company-info .meta-date {
-      font-size: 12px;
+      font-size: 11px;
       margin-top: 4px;
       white-space: nowrap;
     }
@@ -145,33 +276,43 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       table-layout: fixed;
     }
 
+    /* Smaller and tighter than the rows: the labels are longer than the values
+       they sit above, and "QTY" has to fit a column only wide enough for a
+       two-digit number. */
     thead th {
       background: #fff;
       color: #000;
-      padding: 4px 2px;
+      padding: 4px 1px;
       text-align: left;
-      font-size: 13px;
+      font-size: 10px;
       text-transform: uppercase;
       border-bottom: 2px solid #000;
       overflow-wrap: break-word;
     }
 
-    thead th:last-child,
-    thead th:nth-child(n + 3) {
+    thead th:nth-child(n + 2) {
       text-align: right;
     }
 
     tbody td {
       padding: 4px 2px;
-      font-size: 14px;
+      font-size: 13px;
       overflow-wrap: break-word;
     }
 
-    tbody td:last-child,
-    tbody td:nth-child(n + 3) {
+    /*
+      Every column but the description holds a number. They are right-aligned
+      and must never wrap: an amount broken over two lines ("R" above
+      "1 049,99") is both ugly and a line of extra paper per item.
+    */
+    tbody td:nth-child(n + 2) {
       text-align: right;
+      font-size: 11px;
+      white-space: nowrap;
     }
 
+    /* Tuned at ${CONTENT_WIDTH_MM}mm so a six-figure amount still fits on one
+       line, with whatever is left over going to the description. */
     th:nth-child(1),
     td:nth-child(1) {
       width: 32%;
@@ -184,17 +325,17 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
     th:nth-child(3),
     td:nth-child(3) {
-      width: 24%;
+      width: 23%;
     }
 
     th:nth-child(4),
     td:nth-child(4) {
-      width: 14%;
+      width: 9%;
     }
 
     th:nth-child(5),
     td:nth-child(5) {
-      width: 21%;
+      width: 27%;
     }
 
     .totals {
@@ -207,6 +348,10 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       justify-content: space-between;
       padding: 2px 0;
       font-size: 13px;
+    }
+
+    .totals .row span:last-child {
+      white-space: nowrap;
     }
 
     .totals .row.total {
@@ -223,7 +368,7 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     }
 
     .returns-policy p {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       line-height: 1.3;
       text-transform: uppercase;
@@ -340,6 +485,8 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
   </div>
 
+  <script>${pageSizingScript()}</script>
+
 </body>
 
 </html>
@@ -347,53 +494,42 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   LOCAL TESTING ONLY  ---  everything down to the next banner.
-   None of this runs when IS_LOCAL_TEST is false.
+   PRINTING
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** 1mm in CSS pixels at 96dpi, used to turn a measured height into paper mm. */
-const PX_PER_MM = 96 / 25.4;
+/** How long to wait for the receipt document to parse before giving up. */
+const LOAD_TIMEOUT_MS = 10000;
 
 /**
- * Slack added under the last line, in millimetres. Chrome rounds the page box
- * up, and a page even a fraction shorter than its content spills a sliver onto
- * a second sheet - which is far worse than half a millimetre of paper.
+ * How long the print frame stays alive if `afterprint` never arrives. Some
+ * browsers skip the event; tearing the frame down early would cancel a job the
+ * operator has already confirmed, so this only exists to stop the frame leaking.
+ * Long enough that a cashier who walks away mid-dialog still gets their slip.
  */
-const PREVIEW_HEIGHT_TOLERANCE_MM = 0.5;
+const FRAME_LIFETIME_MS = 600000;
 
-/**
- * Extra slack as a share of the content height.
- *
- * The flat tolerance above is not enough on its own: the height is measured off
- * the screen layout, and Chrome lays the receipt out again at printer
- * resolution when it paginates. Every line box it rounds up there adds to a
- * total the screen layout never saw, so the discrepancy grows with the number
- * of rows - ample for a 3-item slip, short for a 40-item one. Falling short by
- * any amount costs a whole extra page, and that page is as tall as the receipt
- * (~490mm at 60 items), so the cushion has to scale with the content too.
- */
-const PREVIEW_HEIGHT_TOLERANCE_RATIO = 0.01;
+/** Grace period after `afterprint` so the job is fully spooled before teardown. */
+const TEARDOWN_DELAY_MS = 1000;
 
-/** Name reported back to the UI in place of a real printer. */
-const PREVIEW_PRINTER_LABEL = 'Browser preview (local test)';
+export class PrintError extends Error {
+  cause?: unknown;
 
-/** Resolve once the tab has parsed the document. */
-function whenDocumentReady(win: Window): Promise<void> {
-  if (win.document.readyState === 'complete') return Promise.resolve();
-  return new Promise((resolve) => {
-    win.addEventListener('load', () => resolve(), { once: true });
-  });
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "PrintError";
+    this.cause = cause;
+  }
 }
 
-/** Resolve once the logo has decoded and webfonts have settled. */
+/** Resolve once the logo has decoded and any webfonts have settled. */
 async function whenAssetsSettled(doc: Document): Promise<void> {
   await Promise.all(
     Array.from(doc.images).map((img) =>
       img.complete
         ? Promise.resolve()
         : new Promise<void>((resolve) => {
-            img.addEventListener('load', () => resolve(), { once: true });
-            img.addEventListener('error', () => resolve(), { once: true });
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
           }),
     ),
   );
@@ -401,167 +537,152 @@ async function whenAssetsSettled(doc: Document): Promise<void> {
   if (doc.fonts?.ready) await doc.fonts.ready;
 }
 
-/**
- * Preview-only stylesheet. It never touches the receipt's own rules - it only
- * pins the page itself to the paper roll:
- *
- *   - the document is exactly 80mm wide on screen and on paper, so the .invoice
- *     block inside it keeps the same 78mm width, spacing and table layout as
- *     the printed slip;
- *   - no page margins, so nothing is inset and no browser header/footer band
- *     is reserved.
- *
- * The `@page` height is filled in afterwards, once the content has been
- * measured, so the sheet is exactly as long as the receipt.
- */
-const PREVIEW_LAYOUT_CSS = `
-  html, body {
-    width: 80mm;
-    margin: 0 auto;
-    padding: 0;
-    background: #fff;
-  }
-
-  @media print {
-    html, body {
-      width: 80mm;
-      margin: 0;
-      padding: 0;
-    }
-  }
-`;
-
-/**
- * Height of the rendered receipt, in millimetres.
- *
- * Measured off the receipt block itself, never off documentElement: in a real
- * tab documentElement.scrollHeight is at least the viewport height, which would
- * size the page to the browser window and print a mostly blank sheet.
- */
-function measurePreviewHeightMm(doc: Document): number {
-  const receipt = doc.querySelector<HTMLElement>('.invoice');
-
-  const heightPx = Math.max(
-    receipt ? Math.ceil(receipt.getBoundingClientRect().height) : 0,
-    doc.body.scrollHeight,
-    Math.ceil(doc.body.getBoundingClientRect().height),
-  );
-
-  if (!heightPx) throw new Error('Measured receipt height was zero');
-
-  const contentMm = heightPx / PX_PER_MM;
-  return contentMm * (1 + PREVIEW_HEIGHT_TOLERANCE_RATIO) + PREVIEW_HEIGHT_TOLERANCE_MM;
-}
-
-function injectStyle(doc: Document, css: string): void {
-  const style = doc.createElement('style');
-  style.textContent = css;
-  doc.head.appendChild(style);
-}
-
-/**
- * LOCAL TESTING ONLY.
- *
- * Open an invoice in a new browser tab and send it to window.print().
- *
- * The tab renders the exact HTML that generateInvoiceHTML() produces - same
- * logo, fonts, spacing, table, borders, totals and footer as the download and
- * as the thermal slip. The only additions are the page-box rules above: 80mm
- * wide, zero margins, and a single page sized to the measured content, so the
- * result is one continuous slip with no blank tail.
- *
- * Resolves with the paper height that was used, in millimetres.
- */
-export async function previewInvoice(sale: Sale, items: SaleItem[]): Promise<number> {
-  const html = generateInvoiceHTML(sale, items);
-
-  const win = window.open('', '_blank');
-  if (!win) {
-    throw new Error(
-      'The invoice preview was blocked by the browser. Allow pop-ups for this site and try again.',
-    );
-  }
-
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-
-  await whenDocumentReady(win);
-
-  const doc = win.document;
-  if (!doc.body) throw new Error('Invoice preview document unavailable');
-
-  // Pin the page to 80mm first: the height must be measured at paper width.
-  injectStyle(doc, PREVIEW_LAYOUT_CSS);
-
-  await whenAssetsSettled(doc);
-
-  // One frame, so the layout above has actually been applied before measuring.
-  // A background tab throttles rAF, hence the timeout as a floor.
-  await new Promise<void>((resolve) => {
+/** Resolve after one painted frame, so the layout above has been applied. */
+function nextFrame(win: Window): Promise<void> {
+  return new Promise<void>((resolve) => {
     let done = false;
     const finish = () => {
-      if (!done) {
-        done = true;
-        resolve();
-      }
+      if (done) return;
+      done = true;
+      resolve();
     };
     win.requestAnimationFrame(finish);
+    // A backgrounded tab throttles rAF; this is the floor.
     win.setTimeout(finish, 150);
   });
+}
 
-  const heightMm = measurePreviewHeightMm(doc);
+/**
+ * Create an off-screen frame holding the receipt, laid out and settled.
+ *
+ * A frame rather than a new tab: a tab needs the pop-up blocker to cooperate,
+ * leaves an `about:blank` header and footer across the top of the slip, and
+ * strands a window the cashier then has to close. The frame is positioned off
+ * screen rather than hidden, because a frame with `display:none` is never laid
+ * out and a frame with `visibility:hidden` prints blank in some browsers.
+ */
+async function mountReceiptFrame(html: string): Promise<HTMLIFrameElement> {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.setAttribute("tabindex", "-1");
+  frame.title = "Receipt";
+  frame.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    // Comfortably wider and taller than the 80mm page, so nothing in the
+    // frame's own viewport reflows the receipt or adds a scrollbar.
+    "width:150mm",
+    "height:400mm",
+    "border:0",
+    "pointer-events:none",
+  ].join(";");
 
-  // A single page, exactly as tall as the receipt - this is what removes the
-  // white space at the bottom and keeps everything on one continuous slip.
-  injectStyle(doc, `@page { size: 80mm ${heightMm.toFixed(2)}mm; margin: 0; }`);
+  document.body.appendChild(frame);
 
-  win.focus();
-  win.print();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(
+        () => reject(new PrintError("The receipt took too long to render.")),
+        LOAD_TIMEOUT_MS,
+      );
+      frame.onload = () => {
+        // Appending the frame can queue a load event for the `about:blank`
+        // document it starts on, which would otherwise resolve this before the
+        // receipt exists. Wait for the load that actually carries the receipt.
+        if (!frame.contentDocument?.querySelector(".invoice")) return;
+        window.clearTimeout(timer);
+        resolve();
+      };
+      frame.srcdoc = html;
+    });
+
+    const doc = frame.contentDocument;
+    const win = frame.contentWindow;
+    if (!doc || !win) throw new PrintError("The receipt document could not be opened.");
+
+    await whenAssetsSettled(doc);
+    await nextFrame(win);
+
+    return frame;
+  } catch (err) {
+    frame.remove();
+    throw err;
+  }
+}
+
+/**
+ * Send receipt HTML to the printer: one continuous slip, 80mm wide, exactly as
+ * tall as its content.
+ *
+ * Resolves with the page height that was used, in millimetres, once the print
+ * dialog has been dealt with.
+ */
+export async function printReceiptHtml(html: string): Promise<number> {
+  const frame = await mountReceiptFrame(html);
+  const win = frame.contentWindow;
+
+  if (!win) {
+    frame.remove();
+    throw new PrintError("The receipt document could not be opened.");
+  }
+
+  // The document sizes its own page; re-run it now that the logo has decoded,
+  // so the page box matches the layout that is about to be printed.
+  const sizePage = (win as Window & { __sizeReceiptPage?: () => number }).__sizeReceiptPage;
+  const heightMm = sizePage ? sizePage() : 0;
+
+  let removed = false;
+  const teardown = () => {
+    if (removed) return;
+    removed = true;
+    frame.remove();
+  };
+
+  /*
+    Teardown is deliberately not tied to this promise resolving. Chrome blocks
+    inside print() until the dialog is dismissed, but not every browser does -
+    and removing the frame while its dialog is still open cancels the job or
+    spools a blank page. So the frame outlives the call and is dropped on
+    afterprint, with a long stop so it cannot leak if that event never comes.
+  */
+  win.addEventListener("afterprint", () => window.setTimeout(teardown, TEARDOWN_DELAY_MS), {
+    once: true,
+  });
+  window.setTimeout(teardown, FRAME_LIFETIME_MS);
+
+  try {
+    // Firefox and Safari will not print a frame that does not hold focus.
+    win.focus();
+    win.print();
+  } catch (err) {
+    teardown();
+    throw new PrintError("The browser refused to open the print dialog.", err);
+  }
 
   return heightMm;
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   PRODUCTION  ---  QZ Tray thermal printing (unchanged).
-   ══════════════════════════════════════════════════════════════════════════ */
-
 /**
- * Print an invoice directly to the 80mm thermal printer through QZ Tray.
- * No browser print dialog is involved. Rejects with a QzError the caller can
- * surface to the cashier.
+ * Print an invoice on the 80mm thermal printer.
  *
- * While IS_LOCAL_TEST is true this is routed to previewInvoice() instead, so
- * every existing caller (POS, invoice list, dashboard) keeps working on a
- * machine with no QZ Tray. Flip the flag to false and the QZ path below - and
- * the whole of ./qz.ts - is used exactly as before.
+ * Resolves with the paper height that was used, in millimetres.
  */
-export function printInvoice(
-  sale: Sale,
-  items: SaleItem[],
-  options: { printerName?: string } = {},
-): Promise<PrintReceiptResult> {
-  // --- LOCAL TESTING ONLY ---
-  if (IS_LOCAL_TEST) {
-    return previewInvoice(sale, items).then((heightMm) => ({
-      printer: PREVIEW_PRINTER_LABEL,
-      heightMm,
-      cut: false,
-      renderer: 'preview' as const,
-    }));
-  }
+export function printInvoice(sale: Sale, items: SaleItem[]): Promise<number> {
+  return printReceiptHtml(generateInvoiceHTML(sale, items));
+}
 
-  // --- PRODUCTION ---
-  return printReceiptHtml(generateInvoiceHTML(sale, items), {
-    printerName: options.printerName,
-    jobName: `Invoice ${sale.invoice_number}`,
-  });
+/** Human-readable message for anything thrown by this module. */
+export function describePrintError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Printing failed for an unknown reason.";
 }
 
 /**
- * printInvoice for the plain buttons that have no error UI of their own: the
- * cashier gets an alert instead of a silently dropped receipt. Screens with
- * richer feedback should use printInvoice / useThermalPrinter directly.
+ * printInvoice for the plain buttons that have no error UI of their own.
+ *
+ * Only a genuine failure to open the print dialog is reported - the ordinary
+ * path, including the cashier cancelling the dialog, is silent.
  */
 export async function printInvoiceWithAlert(
   sale: Sale,
@@ -571,9 +692,8 @@ export async function printInvoiceWithAlert(
     await printInvoice(sale, items);
     return true;
   } catch (err) {
+    console.error(`Could not print invoice ${sale.invoice_number}`, err);
     alert(`Could not print invoice ${sale.invoice_number}:\n${describePrintError(err)}`);
     return false;
   }
 }
-
-export { PAPER_WIDTH_MM };

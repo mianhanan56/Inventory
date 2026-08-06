@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Sale, SaleItem, Customer } from '../../types';
-import { RECEIPT_PREVIEW_WIDTH_PX, generateInvoiceHTML, printInvoiceWithAlert } from '../../lib/invoices';
+import { RECEIPT_PREVIEW_FRAME_WIDTH_PX, generateInvoiceHTML, printInvoiceWithAlert } from '../../lib/invoices';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
 import Modal from '../ui/Modal';
@@ -321,7 +321,7 @@ export default function Invoices() {
               {/* Fixed at the 80mm reference width so the preview matches the slip. */}
               <iframe
                 srcDoc={generateInvoiceHTML(selectedSale, invoiceItems)}
-                style={{ width: RECEIPT_PREVIEW_WIDTH_PX }}
+                style={{ width: RECEIPT_PREVIEW_FRAME_WIDTH_PX }}
                 className="mx-auto h-full min-h-[600px] bg-white shadow"
                 title="Invoice Preview"
               />
