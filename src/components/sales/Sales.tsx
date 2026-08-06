@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { usePersistentState } from '../../hooks/usePersistentState';
 import { clearStagedOrder, readStagedOrder, resolveStagedOrder } from '../../lib/posCart';
-import { Product, Customer, CartItem, Sale } from '../../types';
+import { Product, Customer, CartItem, Sale, SaleItem } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
+import InvoicePreviewModal from '../invoices/InvoicePreviewModal';
 import {
   Search, ShoppingCart, Plus, Minus, CreditCard,
   Banknote, Receipt, Eye, X, Package, Printer, Check, Trash2, RotateCcw,
@@ -27,6 +28,8 @@ export default function Sales() {
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<'pos' | 'history'>('pos');
   const [saleDetail, setSaleDetail] = useState<Sale | null>(null);
+  /** Invoice waiting to be checked in the preview before it goes to the printer. */
+  const [printPreview, setPrintPreview] = useState<{ sale: Sale; items: SaleItem[] } | null>(null);
   // Set when this screen was entered by re-ordering from the Customers tab —
   // drives the banner that says which purchase the cart came from.
   const [reorderInfo, setReorderInfo] = useState<{
@@ -594,9 +597,8 @@ export default function Sales() {
                         <button onClick={async () => {
                           const { data } = await supabase.from('sale_items').select('*').eq('sale_id', sale.id);
                           const items = data || [];
-                          const { printInvoiceWithAlert } = await import('../../lib/invoices');
-                          await printInvoiceWithAlert({ ...sale, sale_items: items }, items);
-                        }} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Print Invoice">
+                          setPrintPreview({ sale: { ...sale, sale_items: items }, items });
+                        }} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Preview & print">
                           <Printer className="w-4 h-4" />
                         </button>
                       </div>
@@ -652,6 +654,14 @@ export default function Sales() {
           </div>
         )}
       </Modal>
+
+      {printPreview && (
+        <InvoicePreviewModal
+          sale={printPreview.sale}
+          items={printPreview.items}
+          onClose={() => setPrintPreview(null)}
+        />
+      )}
     </div>
   );
 }

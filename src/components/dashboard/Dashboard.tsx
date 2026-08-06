@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Product, Sale, StockMovement } from '../../types';
+import { Product, Sale, SaleItem, StockMovement } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
+import InvoicePreviewModal from '../invoices/InvoicePreviewModal';
 import {
   DollarSign,
   Package,
@@ -48,6 +49,8 @@ export default function Dashboard() {
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
   const [recentMovements, setRecentMovements] = useState<StockMovement[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Invoice waiting to be checked in the preview before it goes to the printer. */
+  const [printPreview, setPrintPreview] = useState<{ sale: Sale; items: SaleItem[] } | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -306,11 +309,10 @@ export default function Dashboard() {
                       onClick={async () => {
                         const { data } = await supabase.from('sale_items').select('*').eq('sale_id', sale.id);
                         const items = data || [];
-                        const { printInvoiceWithAlert } = await import('../../lib/invoices');
-                        await printInvoiceWithAlert({ ...sale, sale_items: items }, items);
+                        setPrintPreview({ sale: { ...sale, sale_items: items }, items });
                       }}
                       className="p-1 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded transition"
-                      title="Print Invoice"
+                      title="Preview &amp; print"
                     >
                       <Printer className="w-3.5 h-3.5" />
                     </button>
@@ -385,6 +387,14 @@ export default function Dashboard() {
           </table>
         </div>
       </GlassCard>
+
+      {printPreview && (
+        <InvoicePreviewModal
+          sale={printPreview.sale}
+          items={printPreview.items}
+          onClose={() => setPrintPreview(null)}
+        />
+      )}
     </div>
   );
 }

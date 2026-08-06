@@ -612,6 +612,25 @@ async function mountReceiptFrame(html: string): Promise<HTMLIFrameElement> {
 }
 
 /**
+ * Lay the receipt out off screen, hand the settled document to `read`, then
+ * tear the frame down. For callers that only need to look at the receipt -
+ * measuring or rasterising it - rather than print it.
+ */
+export async function withReceiptDocument<T>(
+  html: string,
+  read: (doc: Document) => T | Promise<T>,
+): Promise<T> {
+  const frame = await mountReceiptFrame(html);
+  try {
+    const doc = frame.contentDocument;
+    if (!doc) throw new PrintError("The receipt document could not be opened.");
+    return await read(doc);
+  } finally {
+    frame.remove();
+  }
+}
+
+/**
  * Send receipt HTML to the printer: one continuous slip, 80mm wide, exactly as
  * tall as its content.
  *

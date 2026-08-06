@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Sale, SaleItem, Customer } from '../../types';
-import { RECEIPT_PREVIEW_FRAME_WIDTH_PX, generateInvoiceHTML, printInvoiceWithAlert } from '../../lib/invoices';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
 import Modal from '../ui/Modal';
-import { Search, FileText, Download, Printer, Eye, Plus, Trash2 } from 'lucide-react';
+import InvoicePreviewModal from './InvoicePreviewModal';
+import { Search, FileText, Printer, Plus } from 'lucide-react';
 
 interface ManualInvoice {
   id: string;
@@ -76,9 +76,6 @@ export default function Invoices() {
     setCreateOpen(false);
   }
 
-  function removeManual(id: string) {
-    setManualInvoices(manualInvoices.filter(m => m.id !== id));
-  }
 
   // Total for a manual invoice: (price x qty) + tax - discount.
   const manualTotal = (m: ManualInvoice) => m.price * m.quantity + m.tax - m.discount;
@@ -115,20 +112,10 @@ export default function Invoices() {
     return { sale, items };
   }
 
-  function viewManual(m: ManualInvoice) {
+  function openManual(m: ManualInvoice) {
     const { sale, items } = buildManualSale(m);
     setSelectedSale(sale);
     setInvoiceItems(items);
-  }
-
-  async function printManual(m: ManualInvoice) {
-    const { sale, items } = buildManualSale(m);
-    await printInvoiceWithAlert(sale, items);
-  }
-
-  function downloadManual(m: ManualInvoice) {
-    const { sale, items } = buildManualSale(m);
-    downloadHtml(sale, items);
   }
 
   async function loadSales() {
@@ -143,35 +130,17 @@ export default function Invoices() {
     return data || [];
   }
 
-  async function viewInvoice(sale: Sale) {
+  /**
+   * Open the invoice in the preview modal - the only row action there is.
+   * Printing and downloading are both confirmed from the preview, so a slip
+   * can never reach the printer without someone having seen it first.
+   */
+  async function openInvoice(sale: Sale) {
+    setActionLoading(sale.id);
     const items = await loadSaleItems(sale);
+    setActionLoading(null);
     setSelectedSale(sale);
     setInvoiceItems(items);
-  }
-
-  async function handlePrint(sale: Sale) {
-    setActionLoading(sale.id);
-    const items = await loadSaleItems(sale);
-    await printInvoiceWithAlert(sale, items);
-    setActionLoading(null);
-  }
-
-  function downloadHtml(sale: Sale, items: SaleItem[]) {
-    const html = generateInvoiceHTML(sale, items);
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${sale.invoice_number}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function handleDownload(sale: Sale) {
-    setActionLoading(sale.id);
-    const items = await loadSaleItems(sale);
-    setActionLoading(null);
-    downloadHtml(sale, items);
   }
 
   const filtered = sales.filter(s =>
@@ -243,17 +212,8 @@ export default function Invoices() {
                   <td className="py-3 px-4 text-navy-300">{m.date ? new Date(m.date).toLocaleDateString('en-ZA') : '—'}</td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => viewManual(m)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition" title="View">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => downloadManual(m)} className="p-1.5 text-navy-400 hover:text-green-600 hover:bg-green-500/10 rounded-lg transition" title="Download HTML">
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => printManual(m)} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Print">
+                      <button onClick={() => openManual(m)} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Preview & print">
                         <Printer className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => removeManual(m.id)} className="p-1.5 text-navy-400 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition" title="Delete">
-                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -280,13 +240,7 @@ export default function Invoices() {
                         <div className="animate-spin w-4 h-4 border-2 border-gold-500 border-t-transparent rounded-full" />
                       ) : (
                         <>
-                          <button onClick={() => viewInvoice(sale)} className="p-1.5 text-navy-400 hover:text-gold-400 hover:bg-gold-500/10 rounded-lg transition" title="View">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDownload(sale)} className="p-1.5 text-navy-400 hover:text-green-600 hover:bg-green-500/10 rounded-lg transition" title="Download HTML">
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handlePrint(sale)} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Print">
+                          <button onClick={() => openInvoice(sale)} className="p-1.5 text-navy-400 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition" title="Preview & print">
                             <Printer className="w-4 h-4" />
                           </button>
                         </>
@@ -300,34 +254,12 @@ export default function Invoices() {
         </div>
       </GlassCard>
 
-      {/* Invoice Preview Modal */}
       {selectedSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedSale(null)} />
-          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 bg-navy-800 text-black">
-              <h2 className="text-lg font-semibold">Invoice {selectedSale.invoice_number}</h2>
-              <div className="flex gap-2">
-                <button onClick={() => downloadHtml(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-gold-500 hover:bg-gold-600 text-black rounded-lg text-sm font-medium transition">
-                  <Download className="w-4 h-4" /> Download
-                </button>
-                <button onClick={() => printInvoiceWithAlert(selectedSale, invoiceItems)} className="flex items-center gap-2 px-3 py-1.5 bg-navy-600 hover:bg-navy-500 rounded-lg text-sm font-medium transition">
-                  <Printer className="w-4 h-4" /> Print
-                </button>
-                <button onClick={() => setSelectedSale(null)} className="p-1.5 hover:bg-navy-600 rounded-lg transition">X</button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-navy-700 py-4">
-              {/* Fixed at the 80mm reference width so the preview matches the slip. */}
-              <iframe
-                srcDoc={generateInvoiceHTML(selectedSale, invoiceItems)}
-                style={{ width: RECEIPT_PREVIEW_FRAME_WIDTH_PX }}
-                className="mx-auto h-full min-h-[600px] bg-white shadow"
-                title="Invoice Preview"
-              />
-            </div>
-          </div>
-        </div>
+        <InvoicePreviewModal
+          sale={selectedSale}
+          items={invoiceItems}
+          onClose={() => setSelectedSale(null)}
+        />
       )}
 
       {/* Create Invoice Modal */}
