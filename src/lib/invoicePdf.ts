@@ -20,7 +20,7 @@ import {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** Points per millimetre - the PDF unit. */
-const PT_PER_MM = 72 / 25.4;
+const PT_PER_MM = 80 / 25.4;
 
 /**
  * Raster density as a multiple of CSS pixels. 2x puts roughly 192dpi on the

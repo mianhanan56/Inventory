@@ -1,4 +1,3 @@
-import qz from "qz-tray";
 import { Sale, SaleItem } from "../types";
 import { LOGO_DATA_URI } from "./logo";
 
@@ -7,20 +6,25 @@ import { LOGO_DATA_URI } from "./logo";
 
    WIDTH:
    The invoice uses the full printable width of whatever paper the selected
-   printer is configured for. QZ Tray/the browser cannot ask an arbitrary
-   printer driver "how wide is your roll" - that number simply isn't exposed
-   by the platform. DEFAULT_PAPER_WIDTH_MM is therefore the one place that
-   value lives; it is a configured expectation (matching the roll the client
-   has loaded today), not something baked into the layout. Call
+   printer is configured for. The browser cannot ask an arbitrary printer
+   driver "how wide is your roll" - that number simply isn't exposed by the
+   platform. DEFAULT_PAPER_WIDTH_MM is therefore the one place that value
+   lives; it is a configured expectation (matching the roll the client has
+   loaded today), not something baked into the layout. Call
    setThermalPaperWidthMm() to change it at runtime (e.g. from a future
    settings screen) without touching this file again.
 
    HEIGHT:
    The receipt height is calculated dynamically from the actual rendered
-   content, exactly as before. The only thing that changed is where that
-   number goes: it used to become a browser @page size for window.print();
-   now it becomes the QZ Tray print job's page size, so the printer gets one
-   continuous receipt instead of a paginated document.
+   content and written into an @page rule (see pageSizingScript() below), so
+   window.print() sends the printer one continuously-sized page instead of a
+   paginated document.
+
+   PRINTING:
+   Printing goes through the browser's own print dialog on a hidden iframe -
+   no extra software (QZ Tray or otherwise) needs to be installed on the
+   till. Whatever printer is already reachable from the OS is picked in that
+   dialog, the same as printing any other web page.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** Fallback/default paper width, used until told otherwise. */
@@ -52,16 +56,6 @@ export function setThermalPaperWidthMm(mm: number): void {
   if (Number.isFinite(mm) && mm > 0) {
     thermalPaperWidthMm = mm;
   }
-}
-
-/**
- * Force a specific QZ Tray printer instead of auto-detecting one. Pass null
- * to go back to auto-detection.
- */
-let preferredThermalPrinterName: string | null = null;
-
-export function setThermalPrinterName(name: string | null): void {
-  preferredThermalPrinterName = name;
 }
 
 /** 1mm in CSS pixels at 96dpi. */
@@ -562,7 +556,7 @@ export function generateInvoiceHTML(
 
     th:nth-child(1),
     td:nth-child(1) {
-      width: 46%;
+      width: 42%;
     }
 
 
@@ -574,7 +568,7 @@ export function generateInvoiceHTML(
 
     th:nth-child(3),
     td:nth-child(3) {
-      width: 18%;
+      width: 20%;
     }
 
 
@@ -586,7 +580,7 @@ export function generateInvoiceHTML(
 
     th:nth-child(5),
     td:nth-child(5) {
-      width: 20%;
+      width: 22%;
     }
 
 
@@ -677,7 +671,7 @@ export function generateInvoiceHTML(
       html,
       body {
 
-        width: ${widthMm}mm + 20mm;
+        width: ${widthMm}mm;
 
         margin: 0;
 
@@ -690,7 +684,6 @@ export function generateInvoiceHTML(
         width: ${widthMm}mm;
 
         max-width: ${widthMm}mm;
-      
 
         margin: 0;
 
@@ -1227,17 +1220,11 @@ export async function withReceiptDocument<T>(
 /* ══════════════════════════════════════════════════════════════════════════
    RECEIPT RASTER
 
-   Renders the receipt to a single bitmap, the same way the PDF export
-   always has: through an SVG foreignObject (parsed as XML, hence
-   XMLSerializer and the escaped stylesheet) rather than innerHTML.
-
-   This is also what QZ Tray printing uses. QZ's own HTML-format printing
-   goes through its bundled Chromium print-to-PDF pipeline, which - on real
-   hardware - was observed silently scaling the whole receipt down (width
-   included) once it got tall enough, and stamping browser print
-   headers/footers onto the paper. Sending a plain image instead removes
-   that "page" abstraction entirely: QZ just lays out a bitmap at a given
-   physical size, so there is nothing left to auto-paginate or auto-scale.
+   Renders the receipt to a single bitmap, the same way the PDF export does:
+   through an SVG foreignObject (parsed as XML, hence XMLSerializer and the
+   escaped stylesheet) rather than innerHTML. Used for PDF export only -
+   on-paper printing goes through window.print() further down, which prints
+   the live DOM rather than a picture of it.
    ══════════════════════════════════════════════════════════════════════════ */
 
 export interface ReceiptRaster {
@@ -1331,214 +1318,74 @@ export async function rasteriseReceiptHtml(
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   QZ TRAY CONNECTION
-
-   No qz.security.setCertificatePromise/setSignaturePromise calls here on
-   purpose. Without them QZ Tray runs in its unsigned mode: the first print
-   from this app pops a "this app is requesting to print, allow?" dialog on
-   the till itself, which the operator approves once. That is the
-   development-friendly path and it is fine for a single-till setup.
-
-   PRODUCTION SIGNING:
-   To remove that prompt permanently, QZ Tray needs a real certificate/key
-   pair and, before the first call in this file that touches qz.websocket or
-   qz.print, you would add:
-
-     qz.security.setCertificatePromise((resolve) => resolve(PEM_CERT_TEXT));
-     qz.security.setSignaturePromise((toSign) => (resolve, reject) =>
-       fetch('/your-backend/sign-qz-request', { method: 'POST', body: toSign })
-         .then((r) => r.text()).then(resolve, reject)
-     );
-
-   The private key must live on a server that signs requests on demand - it
-   must never be shipped in this frontend bundle.
-   ══════════════════════════════════════════════════════════════════════════ */
-
-async function ensureQzConnected(): Promise<void> {
-
-  if (qz.websocket.isActive()) {
-    return;
-  }
-
-  try {
-
-    await qz.websocket.connect();
-
-  } catch (err) {
-
-    throw new PrintError(
-      "QZ Tray is not running. Please install/start QZ Tray and try again.",
-      err,
-    );
-  }
-}
-
-
-/**
- * Name fragments commonly found in thermal/receipt printer names, used only
- * to prefer a thermal-looking printer when more than one is installed. This
- * is a convenience heuristic, not a guarantee - it deliberately does not
- * assume any specific make or model.
- */
-const THERMAL_PRINTER_NAME_HINTS = [
-  "thermal", "receipt", "pos", "tm-", "tm_", "epson", "star", "bixolon",
-  "citizen", "zjiang", "zj-", "xprinter", "rongta", "gprinter", "sprt",
-  "sewoo", "sunmi", "goojprt",
-];
-
-/**
- * All printer names QZ Tray can currently see. Exposed so a future settings
- * screen can let an operator pick a printer explicitly via
- * setThermalPrinterName() - this file adds no UI of its own.
- */
-export async function getAvailablePrinters(): Promise<string[]> {
-
-  await ensureQzConnected();
-
-  const found = await qz.printers.find();
-
-  return Array.isArray(found) ? found : found ? [found] : [];
-}
-
-async function resolveThermalPrinterName(): Promise<string> {
-
-  if (preferredThermalPrinterName) {
-    return preferredThermalPrinterName;
-  }
-
-  let names: string[] = [];
-
-  try {
-
-    names = await getAvailablePrinters();
-
-  } catch {
-
-    // qz.printers.find() failing isn't fatal on its own - fall through
-    // and try the system default printer instead.
-  }
-
-  const thermalMatch = names.find((name) =>
-    THERMAL_PRINTER_NAME_HINTS.some((hint) =>
-      name.toLowerCase().includes(hint),
-    ),
-  );
-
-  if (thermalMatch) {
-    return thermalMatch;
-  }
-
-  try {
-
-    const defaultPrinter = await qz.printers.getDefault();
-
-    if (defaultPrinter) {
-      return defaultPrinter;
-    }
-
-  } catch {
-
-    // No default printer configured - fall through to whatever
-    // qz.printers.find() returned, if anything.
-  }
-
-  if (names.length > 0) {
-    return names[0];
-  }
-
-  throw new PrintError("No thermal printer was found.");
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════
    PRINT RECEIPT
+
+   Prints through the browser's native print dialog on the same hidden
+   iframe used elsewhere in this file. generateInvoiceHTML() already embeds
+   pageSizingScript(), which sets an exact @page size (full paper width,
+   height measured from the rendered content) and re-measures on the
+   'beforeprint' event that win.print() fires - so the dialog sends the
+   printer one continuously-sized page. No local bridge app (QZ Tray or
+   otherwise) is required; whatever printer the OS already has installed is
+   picked from that dialog, same as printing any other page.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * CSS px -> print raster scale. 2x puts roughly 192dpi into the bitmap,
- * close enough to a thermal head's usual 203dpi that nothing looks chunky
- * on the physical receipt.
+ * Safety net for browsers/print setups that never fire 'afterprint' (e.g.
+ * the print was cancelled in a way the page isn't told about). Without
+ * this the hidden iframe could be left mounted indefinitely.
  */
-const PRINT_RASTER_SCALE = 2;
+const PRINT_CLEANUP_TIMEOUT_MS = 60000;
 
 export async function printReceiptHtml(
   html: string,
-): Promise<number> {
+): Promise<void> {
 
-  const widthMm = getThermalPaperWidthMm();
-  const widthPx = Math.round(widthMm * PX_PER_MM);
-  const tailPx = Math.round(PAGE_TAIL_MM * PX_PER_MM);
+  const frame = await mountReceiptFrame(html);
 
-  /*
-   * Same "measure the actual rendered content" concept as before - just
-   * captured as a bitmap instead of written into an @page rule. See the
-   * RECEIPT RASTER section above for why: QZ's own HTML print pipeline was
-   * found (on real hardware) to silently rescale the whole receipt,
-   * including its width, once the content got tall enough. A plain image
-   * has no "page" for a driver to rescale - what we send is what prints,
-   * at the exact size we measured.
-   */
-  const raster = await rasteriseReceiptHtml(
-    html,
-    {
-      widthPx,
-      extraBottomPx: tailPx,
-      scale: PRINT_RASTER_SCALE,
-      mimeType: "image/png",
-    },
-  );
+  const win = frame.contentWindow;
 
-  const heightMm = raster.heightPx / PX_PER_MM;
+  if (!win) {
 
-  await ensureQzConnected();
-
-  const printerName = await resolveThermalPrinterName();
-
-  /*
-   * scaleContent is off deliberately: the image's aspect ratio already
-   * matches widthMm:heightMm exactly (it was rasterised at that size), so
-   * there is nothing to fit - scaling here would only risk softening the
-   * print. margins is 0 so the driver doesn't add its own default page
-   * margins on top of the receipt's own padding.
-   */
-  const config = qz.configs.create(
-    printerName,
-    {
-      units: "mm",
-      margins: 0,
-      scaleContent: false,
-      size: {
-        width: widthMm,
-        height: heightMm,
-      },
-    },
-  );
-
-  try {
-
-    await qz.print(
-      config,
-      [
-        {
-          type: "pixel",
-          format: "image",
-          flavor: "base64",
-          data: raster.dataUrl.replace(/^data:image\/\w+;base64,/, ""),
-        },
-      ],
-    );
-
-  } catch (err) {
+    frame.remove();
 
     throw new PrintError(
-      `The thermal printer could not print the receipt: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-      err,
+      "The receipt document could not be opened.",
     );
   }
 
-  return Math.round(heightMm);
+  try {
+
+    await new Promise<void>((resolve) => {
+
+      let done = false;
+
+      const finish = () => {
+
+        if (done) {
+          return;
+        }
+
+        done = true;
+
+        win.removeEventListener("afterprint", finish);
+
+        resolve();
+      };
+
+      win.addEventListener("afterprint", finish);
+
+      win.setTimeout(finish, PRINT_CLEANUP_TIMEOUT_MS);
+
+      win.focus();
+
+      win.print();
+    });
+
+  } finally {
+
+    frame.remove();
+  }
 }
 
 
@@ -1549,7 +1396,7 @@ export async function printReceiptHtml(
 export function printInvoice(
   sale: Sale,
   items: SaleItem[],
-): Promise<number> {
+): Promise<void> {
 
   return printReceiptHtml(
     generateInvoiceHTML(
