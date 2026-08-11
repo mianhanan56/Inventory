@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { Sale, SaleItem } from '../types';
 import {
-  PAPER_WIDTH_MM,
+  PAGE_WIDTH_MM,
   RECEIPT_PREVIEW_WIDTH_PX,
   generateInvoiceHTML,
   withReceiptDocument,
@@ -12,9 +12,9 @@ import {
 
    The PDF is a picture of the very receipt the printer gets, not a second
    rendering of the same data. The receipt is laid out off screen exactly as it
-   is for printing, rasterised, and dropped onto a page the same 80mm wide and
-   exactly as tall as the content - so the download always matches the slip, and
-   printing the PDF later produces the same slip again. A parallel layout in
+   is for printing, rasterised, and dropped onto a page the same width as the
+   printed slip and exactly as tall as the content - so the download always
+   matches the slip, and printing the PDF later produces the same slip again. A parallel layout in
    PDF primitives would be a second thing to keep in step with the first, and
    the first is the one that has to be right.
    ══════════════════════════════════════════════════════════════════════════ */
@@ -57,11 +57,10 @@ interface ReceiptRaster {
  * XMLSerializer rather than innerHTML, and hence the stylesheet being escaped
  * before it is inlined.
  *
- * The capture is the full width of the paper, not just the printed block. The
- * receipt's own stylesheet lays the page out at 80mm and centres the block
- * inside it, so a capture box any narrower than the paper clips the right-hand
- * column off - the page rules come along with the markup whether the box makes
- * room for them or not.
+ * The capture is the full width of the page, not just the printed block. The
+ * receipt's own page rules come along with the markup whether the capture box
+ * makes room for them or not, so a box any narrower than the page the
+ * stylesheet lays out clips the right-hand column off.
  */
 async function rasteriseReceipt(html: string): Promise<ReceiptRaster> {
   const width = RECEIPT_PREVIEW_WIDTH_PX;
@@ -116,15 +115,15 @@ async function rasteriseReceipt(html: string): Promise<ReceiptRaster> {
 }
 
 /**
- * Build the invoice as a one-page PDF, 80mm wide and as tall as its content.
- * Resolves with the PDF bytes.
+ * Build the invoice as a one-page PDF, the width of the printed slip and as
+ * tall as its content. Resolves with the PDF bytes.
  */
 export async function renderInvoicePdf(sale: Sale, items: SaleItem[]): Promise<Blob> {
   const raster = await rasteriseReceipt(generateInvoiceHTML(sale, items));
 
-  // The raster is the whole page, so the page is the raster: same 80mm width,
-  // height straight off the image's own aspect ratio.
-  const pageWidthPt = PAPER_WIDTH_MM * PT_PER_MM;
+  // The raster is the whole page, so the page is the raster: the same width the
+  // receipt is printed at, height straight off the image's own aspect ratio.
+  const pageWidthPt = PAGE_WIDTH_MM * PT_PER_MM;
   const pageHeightPt = pageWidthPt * (raster.heightPx / raster.widthPx);
 
   // Loaded on demand: the PDF engine is far bigger than the rest of the app and

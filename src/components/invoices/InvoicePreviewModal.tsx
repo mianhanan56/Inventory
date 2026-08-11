@@ -4,6 +4,7 @@ import { Download, Printer, X } from 'lucide-react';
 import { Sale, SaleItem } from '../../types';
 import {
   RECEIPT_PREVIEW_FRAME_WIDTH_PX,
+  RECEIPT_PREVIEW_WIDTH_PX,
   generateInvoiceHTML,
   printInvoiceWithAlert,
 } from '../../lib/invoices';
@@ -16,7 +17,8 @@ const INITIAL_PREVIEW_HEIGHT_PX = 640;
 const SETTLE_DELAY_MS = 400;
 
 /**
- * The receipt at true paper size, grown to its full height.
+ * The receipt laid out at true paper size, grown to its full height and scaled
+ * to the width of the pane.
  *
  * Sizing the frame to its content is the point: left at a fixed height, a long
  * invoice gets its own scrollbar inside the modal's scrollbar, and checking
@@ -25,7 +27,32 @@ const SETTLE_DELAY_MS = 400;
  */
 function ReceiptFrame({ html }: { html: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(INITIAL_PREVIEW_HEIGHT_PX);
+  const [scale, setScale] = useState(1);
+
+  /*
+    Fit the paper to the pane instead of leaving it at 302 CSS px in a pane
+    twice that wide, which stranded the slip in a column of empty space either
+    side. The receipt keeps its own layout - the frame is laid out at true paper
+    size and uniformly scaled, so the aspect ratio, the 80mm page the printer
+    and the PDF are measured from, and every width inside the receipt are all
+    untouched. Only the scrollbar gutter is scaled off the visible edge.
+  */
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    const fit = () => {
+      const available = wrap.clientWidth;
+      if (available) setScale(available / RECEIPT_PREVIEW_WIDTH_PX);
+    };
+
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -52,13 +79,24 @@ function ReceiptFrame({ html }: { html: string }) {
   }, [html]);
 
   return (
-    <iframe
-      ref={frameRef}
-      srcDoc={html}
-      title="Invoice preview"
-      className="mx-auto bg-white shadow-lg"
-      style={{ width: RECEIPT_PREVIEW_FRAME_WIDTH_PX, height }}
-    />
+    /*
+      The wrapper carries the scaled footprint, so the pane scrolls by the
+      height the receipt actually occupies rather than its unscaled height.
+    */
+    <div ref={wrapRef} className="overflow-hidden" style={{ height: height * scale }}>
+      <iframe
+        ref={frameRef}
+        srcDoc={html}
+        title="Invoice preview"
+        className="bg-white shadow-lg"
+        style={{
+          width: RECEIPT_PREVIEW_FRAME_WIDTH_PX,
+          height,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+        }}
+      />
+    </div>
   );
 }
 

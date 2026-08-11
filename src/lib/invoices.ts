@@ -11,16 +11,17 @@ import { LOGO_DATA_URI } from "./logo";
      height  the receipt document measures itself and writes an @page rule as
              tall as its own content, so the roll is cut right after the last
              line and a long slip is never split across pages.
-     width   the content is a fixed 72mm block centred on an 80mm page, which
-             is the printable window of every common 80mm thermal head. Content
-             wider than that gets shrunk by the driver to fit, which is what
-             makes the text come out small and the layout look squeezed.
+     width   the page box is the head's 72mm printable window rather than the
+             80mm roll, and the receipt fills it. A page as wide as the paper is
+             wider than the head can print, so the driver scales the whole slip
+             down to fit - and that shrink is what made the text come out small
+             with a band of blank paper down either side.
 
    Both numbers live in the constants below. They are the only knobs worth
    touching if a particular printer disagrees.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** Physical width of the paper roll, in millimetres. This is the page width. */
+/** Physical width of the paper roll, in millimetres. */
 export const PAPER_WIDTH_MM = 80;
 
 /**
@@ -34,18 +35,41 @@ export const PAPER_WIDTH_MM = 80;
  */
 export const CONTENT_WIDTH_MM = 72;
 
+/**
+ * Width of the page box, in millimetres - the printable window, not the roll.
+ *
+ * This is the one number the driver reacts to. Sized to the paper instead, the
+ * page is 80mm of which the head can only reach 72mm, so a driver that fits the
+ * page to what it can print scales the entire slip to 90% - and a page that is
+ * already only 90% ink (a 72mm block centred on 80mm) then lands as ~65mm of
+ * print on a 72mm head, with the loss showing up as blank paper on both sides.
+ * Set to the printable window, the fit is a no-op: no scaling, nothing to
+ * centre, and no part of the page falls in the dead margin where it would be
+ * clipped.
+ */
+export const PAGE_WIDTH_MM = CONTENT_WIDTH_MM;
+
+/**
+ * Side padding inside the page, in millimetres.
+ *
+ * Not a design margin - it is there because thermal paper wanders a little in
+ * the guides, and a line of print starting on the head's very first dot column
+ * loses its first character when it does. One millimetre is about the drift.
+ */
+const CONTENT_SIDE_PADDING_MM = 1;
+
 /** 1mm in CSS pixels at 96dpi - the browser's fixed conversion. */
 const PX_PER_MM = 96 / 25.4;
 
 /**
- * Reference width in CSS pixels for on-screen previews (80mm at 96dpi), so a
- * preview pane shows the slip at exactly the size it prints.
+ * Reference width in CSS pixels for on-screen previews (the page at 96dpi), so
+ * a preview pane shows the slip at exactly the size it prints.
  */
-export const RECEIPT_PREVIEW_WIDTH_PX = Math.round(PAPER_WIDTH_MM * PX_PER_MM);
+export const RECEIPT_PREVIEW_WIDTH_PX = Math.round(PAGE_WIDTH_MM * PX_PER_MM);
 
 /**
- * Width to give a frame that previews a receipt: the paper plus room for the
- * frame's own vertical scrollbar. Sized to the paper exactly, a long receipt
+ * Width to give a frame that previews a receipt: the page plus room for the
+ * frame's own vertical scrollbar. Sized to the page exactly, a long receipt
  * would gain a scrollbar, lose that much of its content area, and pick up a
  * horizontal scrollbar as well.
  */
@@ -91,7 +115,7 @@ const PAGE_TAIL_MM = 2;
 function pageSizingScript(): string {
   return `
     (function () {
-      var PAPER_MM = ${PAPER_WIDTH_MM};
+      var PAGE_MM = ${PAGE_WIDTH_MM};
       var TAIL_MM = ${PAGE_TAIL_MM};
       var PX_PER_MM = 96 / 25.4;
 
@@ -109,7 +133,7 @@ function pageSizingScript(): string {
         var page = Math.ceil(px / PX_PER_MM + TAIL_MM);
 
         pageStyle.textContent =
-          '@page { size: ' + PAPER_MM + 'mm ' + page + 'mm; margin: 0; }' +
+          '@page { size: ' + PAGE_MM + 'mm ' + page + 'mm; margin: 0; }' +
           // One page, always.
           '@media print {' +
           '  html, body { height: ' + page + 'mm; overflow: hidden; }' +
@@ -165,10 +189,11 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
 
   <style>
     /*
-      The receipt is laid out at its real paper size on screen as well as on
-      paper - no @media print rule changes any width. That is what makes the
-      measurement above trustworthy: the browser measures the very layout it
-      is about to print, so the page can be sized to it exactly.
+      The receipt is laid out at its real printed size on screen as well as on
+      paper - the print block at the foot restates those widths, it never
+      changes one. That is what makes the measurement above trustworthy: the
+      browser measures the very layout it is about to print, so the page can be
+      sized to it exactly.
     */
 
     * {
@@ -177,11 +202,24 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       box-sizing: border-box;
     }
 
+    /*
+      Zero margins, so the slip starts at the head's first dot column instead of
+      inside a margin the driver would have to scale the page down to honour.
+      The page height is written by the sizing script; leaving it out here means
+      that if the script ever fails to run, a roll printer falls back to its own
+      continuous feed rather than to a fixed sheet with a long blank tail.
+    */
+    @page {
+      margin: 0;
+    }
+
     html,
     body {
-      /* The page itself: the full width of the roll. */
-      width: ${PAPER_WIDTH_MM}mm;
-      margin: 0 auto;
+      /* The page itself: the printable window of the head. */
+      width: ${PAGE_WIDTH_MM}mm;
+      /* Not "0 auto": centring only matters when something is narrower than the
+         page, and on paper that slack is the blank band down either side. */
+      margin: 0;
       background: #fff;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -192,10 +230,10 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
     }
 
     .invoice {
-      /* The printable window of an 80mm head, centred on the roll. */
-      width: ${CONTENT_WIDTH_MM}mm;
-      margin: 0 auto;
-      padding: 3mm 0;
+      /* Fills the page, edge to edge but for the drift allowance. */
+      width: 100%;
+      margin: 0;
+      padding: 3mm ${CONTENT_SIDE_PADDING_MM}mm;
       font-family: Arial, Helvetica, sans-serif;
       color: #000;
       background: #fff;
@@ -311,8 +349,9 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       white-space: nowrap;
     }
 
-    /* Tuned at ${CONTENT_WIDTH_MM}mm so a six-figure amount still fits on one
-       line, with whatever is left over going to the description. */
+    /* Proportions, so they hold at whatever the printed width works out to.
+       Tuned so a six-figure amount still fits on one line, with whatever is left
+       over going to the description. */
     th:nth-child(1),
     td:nth-child(1) {
       width: 32%;
@@ -378,6 +417,39 @@ export function generateInvoiceHTML(sale: Sale, items: SaleItem[]) {
       margin-top: 4px;
       font-weight: 700;
       text-transform: none;
+    }
+
+    /*
+      The print geometry, stated here as well as in the sizing script so it holds
+      even if the script never runs or the job is started from the browser's own
+      menu. Every rule below repeats the screen layout rather than changing it -
+      no width differs between screen and paper, which is what keeps the height
+      the script measures on screen true of the page it is about to print.
+    */
+    @media print {
+      html,
+      body {
+        width: ${PAGE_WIDTH_MM}mm;
+        margin: 0;
+        padding: 0;
+      }
+
+      .invoice {
+        width: 100%;
+        margin: 0;
+        padding: 3mm ${CONTENT_SIDE_PADDING_MM}mm;
+        /*
+          A cell wider than its column would widen the page, and a page wider
+          than the head is scaled down to fit - taking the whole slip with it.
+          Clipping one overlong value is the lesser failure, and with a fixed
+          table layout and word breaking above there is nothing left to clip.
+        */
+        overflow-x: hidden;
+      }
+
+      table {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -570,7 +642,7 @@ async function mountReceiptFrame(html: string): Promise<HTMLIFrameElement> {
     "position:fixed",
     "left:-10000px",
     "top:0",
-    // Comfortably wider and taller than the 80mm page, so nothing in the
+    // Comfortably wider and taller than the receipt page, so nothing in the
     // frame's own viewport reflows the receipt or adds a scrollbar.
     "width:150mm",
     "height:400mm",
@@ -631,8 +703,8 @@ export async function withReceiptDocument<T>(
 }
 
 /**
- * Send receipt HTML to the printer: one continuous slip, 80mm wide, exactly as
- * tall as its content.
+ * Send receipt HTML to the printer: one continuous slip, as wide as the head
+ * can print and exactly as tall as its content.
  *
  * Resolves with the page height that was used, in millimetres, once the print
  * dialog has been dealt with.
