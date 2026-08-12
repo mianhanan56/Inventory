@@ -17,8 +17,9 @@ import { LOGO_DATA_URI } from "./logo";
    HEIGHT:
    The receipt height is calculated dynamically from the actual rendered
    content and written into an @page rule (see pageSizingScript() below), so
-   window.print() sends the printer one continuously-sized page instead of a
-   paginated document.
+   the roll is cut just after the last line instead of at the end of a fixed
+   sheet. Capped, though - see PAGE LENGTH below. Past the cap the receipt
+   runs onto further pages; it is never scaled to fit one.
 
    PRINTING:
    Printing goes through the browser's own print dialog on a hidden iframe -
@@ -26,32 +27,30 @@ import { LOGO_DATA_URI } from "./logo";
    till. Whatever printer is already reachable from the OS is picked in that
    dialog, the same as printing any other web page.
 
-   ── THE PRINT DIALOG IS PART OF THIS LAYOUT ───────────────────────────────
+   ── WHY THE WIDTH IS NOT THE DIALOG'S BUSINESS ────────────────────────────
 
    A page cannot set the browser's own print scale, margins or paper choice;
-   those are the operator's, deliberately out of reach of any script, which is
-   also why no library could ever have fixed the narrow print from in here.
-   The sizing below is therefore written against a fixed set of dialog
-   settings, confirmed with the client and set once per PC (Chrome remembers
-   them per destination):
+   those are the operator's, deliberately out of reach of any script. So the
+   layout below is written to be correct at any of them rather than to depend
+   on a particular set: the one thing that ever made the slip narrow was this
+   file asking for a page the paper could not hold, and it no longer does.
 
-     Scale                100%  (the custom box - NOT "Default", which is
-                                "fit to printable area" and is what shrank an
-                                80mm page to 72mm, taking the width with it)
-     Margins              None  (Chrome's own margin, on top of ours, also
-                                triggers that same shrink)
-     Paper size           80 x 3276mm  /  Roll Paper  /  Receipt
-                                (a short form such as A4 or 80 x 297mm makes
-                                a long slip tile across sheets, because at
-                                100% the driver no longer squashes it to fit)
-     Background graphics  On    (off drops the grey header and totals bands)
+   These dialog settings are still worth having (Chrome remembers them per
+   destination), but they change how much paper a receipt spends, not how wide
+   it prints:
+
+     Margins              None  (or Default - @page sets margin: 0 either way)
+     Paper size           the 80mm form the printer is loaded with; the roll
+                                form (80 x 3276mm / Roll Paper / Receipt) lets
+                                a long invoice print as one continuous slip
+                                instead of over several pages - raise
+                                MAX_PAGE_LENGTH_MM to match if it is selected
+     Background graphics  On    (off drops the header and totals rules)
      Headers and footers  Off   (on prints the URL, date and "1/1" on the roll)
      Layout               Portrait
 
-   With those in force nothing between here and the paper rescales the page,
-   so the millimetres written below are the millimetres printed - and the two
-   numbers that matter are DRIVER_PAPER_LENGTH_MM (must match the paper size
-   above) and PAPER_WIDTH_MM / SIDE_MARGIN_MM (the 72mm ink band).
+   The numbers that matter are PAPER_WIDTH_MM / SIDE_MARGIN_MM (the 72mm ink
+   band) and DEFAULT_PAGE_LENGTH_MM (the page-length cap).
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -153,134 +152,145 @@ export function receiptFrameWidthPx(widthMm?: number): number {
 const PAGE_TAIL_MM = 2;
 
 /* ──────────────────────────────────────────────────────────────────────────
-   PAGE LENGTH  ---  one page, as long as the listing, and never scaled.
+   PAGE LENGTH  ---  as long as the listing, and NEVER scaled to fit.
 
-   Three things have to hold at once, and only one order of operations gets all
-   three:
+   Three things want to hold at once, and only two of them can:
 
-     one page          - never split, whatever the item count
      paper used = list - the slip is as long as its content, no blank tail
      true width        - the ink spans the page, not a shrunken copy of it
+     one page          - never split, whatever the item count
 
    The trap is that a page longer than the driver's paper does not print long.
-   Left on Chrome's default scale the driver shrinks it to fit, and shrinking is
-   uniform, so the width goes with it - a 625mm page squeezed onto 297mm paper
-   prints 70mm of content as ~33mm of ink. That is where the white margins down
-   both sides came from, and it had nothing to do with which printer was
-   attached, which is why a second printer on a second PC did it too. At 100%
-   scale the driver stops shrinking, and the same overflow tiles across sheets
-   instead. Either way the fault is one page longer than the paper, so the fix
-   is the same: don't ask for one.
+   Asked for one, the driver reconciles it with the sheet by shrinking it to
+   fit - and shrinking is uniform, so the width goes down with the height. A
+   392mm page (30 items) on a 297mm sheet comes back at 297/392 = 76%, so the
+   72mm ink band prints as 55mm with 12mm of blank down either side; 60 items
+   land at 32mm. That is the whole of the "receipts get narrow when there are
+   many products" report. The width never grew - the height outgrew the sheet
+   and took the width with it. It has nothing to do with which printer is
+   attached, which is why a second printer on a second PC did it too.
 
-   So the length of the paper is stated here, and the receipt is fitted to it in
-   the browser rather than left to the driver. Anything shorter is printed
-   untouched at full size, and the page is cut exactly to the content so no
-   paper is wasted. Only a receipt too long for the roll itself is scaled, and
-   then DOWN VERTICALLY AND HORIZONTALLY TOGETHER with the page width held at
-   full width - the layout is widened by the same factor it is scaled by, so the
-   ink still reaches both edges.
+   The width is not negotiable and the height is, so "one page" is the one that
+   gives. The page box is never allowed past MAX_PAGE_LENGTH_MM below:
 
-   IF LONG RECEIPTS EVER COME OUT SMALL AGAIN, this pair of numbers is why: the
-   paper size selected in the driver has to match DRIVER_PAPER_LENGTH_MM. The
-   Xprinter XP-Q200 the client runs offers a 3276mm roll form, which is ~320
-   line items - past any real till slip, so in practice nothing is ever scaled.
-   Selecting a short form instead (80 x 297mm) without lowering this number is
-   the one combination that tiles.
+     content within the cap  one page, cut exactly to the content. The common
+                             case - no paper wasted, nothing split.
+     content past the cap    spread over the fewest pages that keep each one
+                             inside the cap, and spread evenly so the last page
+                             is as full as the first. Every page is smaller than
+                             the sheet, so the driver's fit is always a no-op
+                             and the ink band is the same 72mm on a one-line
+                             slip and a hundred-line one.
+
+   Margins are zero, so consecutive pages abut: on a roll a split is just more
+   paper coming out, which is exactly the "long invoices extend vertically"
+   behaviour wanted here.
+
+   IF LONG RECEIPTS EVER COME OUT SMALL AGAIN, this number is why - it has been
+   raised past the sheet the driver is really set to. It is a cap on what we ask
+   for, so it is safe low and dangerous high: too low only splits a receipt that
+   need not have been split, while too high shrinks it.
    ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Length of the paper form selected in the printer driver.
+ * Longest page box to ask a driver for, in millimetres.
  *
- * MUST match Printing preferences -> Paper size. 3276mm is the roll length the
- * Xprinter 80mm drivers expose (listed as `80 x 3276mm`, `Roll Paper` or
- * `Receipt`); it is a maximum the driver truncates to the actual page, not a
- * length it feeds. If a driver is ever set to a short form instead, put that
- * form's length here - 297 for `80 x 297mm` - and long slips go back to being
- * scaled onto one page rather than tiled across several.
+ * 297mm is the sheet length an 80mm driver left on its stock form reports, and
+ * is what the client's slips measure - so it is the length that is safe without
+ * anyone having configured anything. Roughly twenty line items; past that the
+ * receipt runs onto a second page rather than being squeezed onto one.
+ *
+ * Raise it to match a driver deliberately set to a longer form and long
+ * invoices go back to printing as one continuous slip: the Xprinter 80mm
+ * drivers expose a `80 x 3276mm` roll form (listed as `Roll Paper` or
+ * `Receipt`) which is past any real till slip. Nothing here breaks if the cap
+ * is never reached. Do NOT raise it on the assumption that the form has been
+ * changed - an unreached cap costs nothing, an overreached one costs the width.
  */
-const DRIVER_PAPER_LENGTH_MM = 3276;
+export const DEFAULT_PAGE_LENGTH_MM = 297;
+
+/** Sanity bounds for the override: shorter than the tallest single block cannot
+ *  be paginated into, longer than the roll form cannot be printed at all. */
+const MIN_PAGE_LENGTH_MM = 100;
+const MAX_PAGE_LENGTH_MM = 3276;
 
 /**
- * Longest page that may be asked for. The paper length itself: there is nothing
- * to gain by staying under it, and every millimetre below it is type the
- * everyday receipt would have been shrunk by for no reason.
+ * The page-length cap used for printing.
+ *
+ * Deliberately not persisted, for the same reason as the width: a stored value
+ * would outlive a change to the default and leave one machine printing to a
+ * sheet length nobody chose.
  */
-const MAX_PAGE_HEIGHT_MM = DRIVER_PAPER_LENGTH_MM;
+let thermalPageLengthMm: number = DEFAULT_PAGE_LENGTH_MM;
+
+export function getThermalPageLengthMm(): number {
+  return thermalPageLengthMm;
+}
 
 /**
- * How far the receipt may be shrunk to win a single page.
+ * Override the page-length cap in mm, or pass null to go back to the default.
  *
- * Unreachable against a 3276mm roll and meant to stay that way - it is the
- * backstop for a driver set to a short form. Below 0.5 the type stops being
- * readable off a thermal head, so a receipt too long even at this floor is left
- * here and allowed to run over: a legible slip that tiles beats an illegible
- * one that doesn't.
+ * Set this to the paper form the driver is on (3276 for the Xprinter roll form)
+ * to let long invoices print as a single continuous slip.
  */
-const MIN_FIT_SCALE = 0.5;
+export function setThermalPageLengthMm(mm: number | null): void {
+  if (mm === null) {
+    thermalPageLengthMm = DEFAULT_PAGE_LENGTH_MM;
+    return;
+  }
+  if (!Number.isFinite(mm)) return;
+  thermalPageLengthMm = Math.min(MAX_PAGE_LENGTH_MM, Math.max(MIN_PAGE_LENGTH_MM, mm));
+}
 
 
 /* ══════════════════════════════════════════════════════════════════════════
    RECEIPT PAGE HEIGHT
    ══════════════════════════════════════════════════════════════════════════ */
 
-function pageSizingScript(widthMm: number): string {
+function pageSizingScript(widthMm: number, maxPageMm: number): string {
   return `
     (function () {
 
       var PAPER_MM = ${widthMm};
-      var SIDE_MM = ${SIDE_MARGIN_MM};
-      var CONTENT_MM = ${receiptContentWidthMm(widthMm)};
       var TAIL_MM = ${PAGE_TAIL_MM};
-      var MAX_PAGE_MM = ${MAX_PAGE_HEIGHT_MM};
-      var MIN_SCALE = ${MIN_FIT_SCALE};
+      var MAX_PAGE_MM = ${maxPageMm};
       var PX_PER_MM = 96 / 25.4;
 
       var pageStyle = document.createElement('style');
       pageStyle.id = 'receipt-page-size';
       document.head.appendChild(pageStyle);
 
-      /*
-       * Shrink the receipt by 'k' while keeping it full width.
-       *
-       * The layout is widened by exactly the factor it is then scaled down by,
-       * so the ink still lands on both edges of the page - only the height
-       * comes down. transform is used rather than zoom because it leaves the
-       * glyph shapes alone; the page height is taken from the transformed box
-       * below, so the shorter result is what the paper is cut to.
-       *
-       * Written as an inline style, not a stylesheet: the receipt's own rules
-       * set .invoice width at the same specificity, including inside its @media
-       * print block, so a rule here would be a coin toss on source order - and
-       * losing it silently means the fit shrinks the height without widening the
-       * layout, which is precisely the narrow print this exists to prevent.
-       */
-      function applyFit(k) {
-        var receipt = document.querySelector('.invoice');
-        if (!receipt) return;
 
-        if (k >= 1) {
-          receipt.style.width = '';
-          receipt.style.maxWidth = '';
-          receipt.style.transform = '';
-          receipt.style.transformOrigin = '';
-          return;
-        }
-
-        /* Widen the printed block, not the page: the side spacing lives on the
-           body, outside the transform, so it stays a true 4mm at any scale. */
-        receipt.style.width = (CONTENT_MM / k) + 'mm';
-        receipt.style.maxWidth = 'none';
-        receipt.style.transform = 'scale(' + k + ')';
-        receipt.style.transformOrigin = 'top left';
-      }
-
-
-      /* Height as it will appear on paper, in mm. getBoundingClientRect
-         reports the transformed box, which is exactly what is wanted here. */
+      /* Height of the receipt as laid out, in mm. Only .invoice is measured:
+         document.body is never shorter than the viewport, so measuring the body
+         would size the page to the window and print a mostly blank sheet. */
       function renderedHeightMm() {
         var receipt = document.querySelector('.invoice');
         if (!receipt) return 0;
-        return receipt.getBoundingClientRect().height / PX_PER_MM;
+        return Math.max(receipt.getBoundingClientRect().height, receipt.scrollHeight) / PX_PER_MM;
+      }
+
+
+      /*
+       * Height of the tallest thing that cannot be broken across a page, in mm -
+       * so, the most paper a single page break can waste.
+       *
+       * A block that will not fit in what is left of a page is pushed whole onto
+       * the next one, so the page count has to be settled against that cost or
+       * the split spills onto an unplanned extra page.
+       */
+      function tallestUnbreakableMm() {
+        var blocks = document.querySelectorAll(
+          '.invoice .header, .invoice tbody tr, .invoice .totals .row, .invoice .returns-policy'
+        );
+        var tallest = 0;
+
+        for (var i = 0; i < blocks.length; i++) {
+          var h = blocks[i].getBoundingClientRect().height;
+          if (h > tallest) tallest = h;
+        }
+
+        return tallest / PX_PER_MM;
       }
 
 
@@ -290,91 +300,93 @@ function pageSizingScript(widthMm: number): string {
           return 0;
         }
 
-        /*
-         * Fit to one page. Nothing is scaled unless the receipt is longer than
-         * paper supports, so an everyday slip is untouched.
-         */
-        applyFit(1);
-
         var heightMm = renderedHeightMm();
         if (!heightMm) return 0;
 
-        var k = 1;
-
-        function fits(mm) {
-          return mm + TAIL_MM <= MAX_PAGE_MM;
-        }
-
-        if (!fits(heightMm)) {
-          /*
-           * Search for the LARGEST scale that still fits, rather than the first
-           * one that does.
-           *
-           * Height does not fall in step with the scale: widening the layout
-           * also makes the descriptions wrap less, so each shrink buys more room
-           * than arithmetic predicts. Taking the first fit therefore overshoots
-           * badly - a 39-item slip landed at 185mm of a 280mm page, i.e. type a
-           * third smaller than it needed to be. Bisection spends the whole page.
-           */
-          var lo = MIN_SCALE;
-          var hi = 1;
-
-          applyFit(lo);
-          var floorHeight = renderedHeightMm();
-
-          if (!fits(floorHeight)) {
-            // Too long even at the floor: stay legible and let it run over.
-            k = lo;
-            heightMm = floorHeight;
-          } else {
-            for (var i = 0; i < 8; i++) {
-              var mid = (lo + hi) / 2;
-              applyFit(mid);
-              if (fits(renderedHeightMm())) {
-                lo = mid;
-              } else {
-                hi = mid;
-              }
-            }
-            k = lo;
-            applyFit(k);
-            heightMm = renderedHeightMm();
-          }
-        }
+        var contentMm = heightMm + TAIL_MM;
 
         /* The page is the receipt: exactly as long as what is on it, so the
            paper used matches the listing and there is no blank tail. */
-        var page = Math.ceil(heightMm + TAIL_MM);
+        var pages = 1;
+        var page = Math.ceil(contentMm);
+
+        if (contentMm > MAX_PAGE_MM) {
+          /*
+           * Too long for the sheet. Spread it over pages instead of scaling it:
+           * scaling is uniform, and a uniform shrink is the narrow print this
+           * whole file exists to prevent.
+           *
+           * Split evenly rather than filling pages to the cap and leaving a
+           * near-empty last one - with zero margins the pages abut on the roll,
+           * so an even split means the paper still ends just after the footer.
+           */
+          var slackMm = tallestUnbreakableMm();
+
+          /*
+           * Each break costs a pushed block, and paying for the breaks can call
+           * for another page, which is another break. Settle it rather than
+           * solve it: the second pass is over a page count that already carries
+           * the first pass's slack, and a third has never changed the answer.
+           */
+          for (var pass = 0; pass < 2; pass++) {
+            pages = Math.ceil((contentMm + (pages - 1) * slackMm) / MAX_PAGE_MM);
+          }
+
+          page = Math.ceil((contentMm + (pages - 1) * slackMm) / pages);
+        }
+
+        /*
+         * The cap is the invariant the printed width rests on, so it is enforced
+         * here rather than trusted to the arithmetic above.
+         *
+         * That arithmetic can overshoot it: the second pass can raise the page
+         * count, and the even split then divides a total that carries slack for
+         * MORE breaks than the count it is divided by was derived from. Swept
+         * over the realistic range (cap 297, tallest block 30-60mm, content up to
+         * 5000mm) that overshoots on ~15% of inputs, by up to 10mm - which is a
+         * 297mm sheet being asked for a 307mm page, i.e. the 72mm band printing
+         * at 69.6mm. Small, but it is precisely the bug this file is fixing, so
+         * it does not get to come back through the back door.
+         *
+         * Clamping can only ever add a page, never lose content: Chrome
+         * paginates whatever does not fit, and past the cap no clamp is written.
+         */
+        if (page > MAX_PAGE_MM) {
+          page = MAX_PAGE_MM;
+        }
 
 
-        pageStyle.textContent =
+        var css =
           '@page {' +
           '  size: ' + PAPER_MM + 'mm ' + page + 'mm;' +
           '  margin: 0;' +
-          '}' +
-
-          '@media print {' +
-
-          /* One page, always - the height is already the whole receipt, so
-             anything past it can only be a rounding sliver.
-             The side padding is restated here: zeroing it would print the
-             receipt hard against both paper edges, in the strip the head
-             cannot reach. */
-          '  html, body {' +
-          '    width: ' + PAPER_MM + 'mm;' +
-          '    height: ' + page + 'mm;' +
-          '    overflow: hidden;' +
-          '    margin: 0;' +
-          '    padding: 0;' +
-          '  }' +
-
-          '  body { padding: 0 ' + SIDE_MM + 'mm; }' +
-
           '}';
+
+        /*
+         * Clamp the document to the page, but ONLY when it is a single page.
+         *
+         * On one page this is a backstop for the day a browser lays the receipt
+         * out a shade taller than it measured: the page is already tall enough
+         * for the content, so anything past it can only be a rounding sliver,
+         * and clipping a sliver beats spilling it onto a second slip.
+         *
+         * Past the cap, pagination is the intended outcome and a clamp is
+         * precisely the thing that prevents it - which would clip every item
+         * after the first page off the receipt entirely.
+         */
+        if (pages === 1) {
+          css +=
+            '@media print {' +
+            '  html, body { height: ' + page + 'mm; overflow: hidden; }' +
+            '  .invoice { max-height: ' + page + 'mm; overflow: hidden; }' +
+            '}';
+        }
+
+        pageStyle.textContent = css;
 
 
         window.__receiptPageHeightMm = page;
-        window.__receiptFitScale = k;
+        window.__receiptPageCount = pages;
 
         return page;
       }
@@ -430,6 +442,7 @@ export function generateInvoiceHTML(
   sale: Sale,
   items: SaleItem[],
   widthMm: number = getThermalPaperWidthMm(),
+  maxPageMm: number = getThermalPageLengthMm(),
 ) {
 
   const fmt = (v: number) =>
@@ -507,10 +520,15 @@ export function generateInvoiceHTML(
 
       /*
        * The page is the paper: 80mm. The side spacing is padding inside it
-       * (box-sizing is border-box, so the page stays 80mm), which keeps it
-       * outside the fit transform and therefore a true 4mm at any scale.
+       * (box-sizing is border-box, so the page stays 80mm).
+       *
+       * max-width as well as width, so no amount of content can push the block
+       * wider than the paper - a page wider than the sheet is one the driver
+       * scales down to fit, and that scale takes the type with it.
        */
       width: ${widthMm}mm;
+
+      max-width: ${widthMm}mm;
 
       margin: 0 auto;
 
@@ -536,12 +554,18 @@ export function generateInvoiceHTML(
     /*
      * Initial @page.
      *
-     * pageSizingScript() replaces this with the exact dynamic height
-     * before printing.
+     * Margins only - no size. pageSizingScript() adds the size, with the height
+     * measured off the rendered content.
+     *
+     * Deliberately not "size: 80mm auto": "&lt;length> auto" is not a legal
+     * value for size (it takes one length, two lengths, or the keyword auto
+     * alone), so Chrome drops the whole declaration and the rule silently
+     * becomes this one. Stating it outright means the fallback is the one we
+     * chose: if the sizing script never runs, the page box is the driver's own
+     * paper, which on a roll printer is continuous feed - and a page box that IS
+     * the paper can never be a page box the driver has to shrink.
      */
     @page {
-
-      size: ${widthMm}mm auto;
 
       margin: 0;
     }
@@ -595,19 +619,20 @@ export function generateInvoiceHTML(
        ══════════════════════════════════════════════════════════════════ */
 
     /*
-     * Keep individual rows together.
+     * No line of the receipt may be split down the middle by a page break.
      *
-     * Do NOT put break-inside: avoid on the entire table because a very
-     * large table could then be moved as a whole to another page.
+     * Applied to the individual blocks, never to the containers that hold
+     * them. A block that carries break-inside: avoid and does not fit is
+     * pushed whole onto the next page, so putting it on .invoice or on the
+     * table would push the ENTIRE receipt and leave the first page blank -
+     * which is also why it is the table rows listed here and not the table.
+     * Past the page-length cap a long receipt is meant to run onto another
+     * page, and a table that refuses to break cannot.
      */
-    tr {
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-
-
+    tr,
+    td,
+    th,
     .header,
-    .totals,
     .totals .row,
     .returns-policy {
 
@@ -756,6 +781,29 @@ export function generateInvoiceHTML(
        TABLE COLUMNS
        ══════════════════════════════════════════════════════════════════ */
 
+    /*
+     * The five columns total 100%, of a table that is the full 72mm ink band.
+     *
+     * These widths do not vary with the item count - they are percentages of a
+     * table that is always the same 72mm - so nothing here is involved in the
+     * receipt's width. They are a fixed-layout table, though, which means the
+     * nowrap money columns overflow rather than growing when a value will not
+     * fit, and the LINE TOTAL column is the last one, so its overflow lands
+     * outside the band, in the strip under the paper guide where the head cannot
+     * print. Measured against the glyph boxes (element rects cannot see this -
+     * the cell keeps its column width while the text spills out of it):
+     *
+     *   line total below R10 000   0mm      fits
+     *   R10 000 - R99 999          0.54mm   the last digit loses ~4 dots
+     *   R100 000 and up            2.16mm   the last digit is lost
+     *
+     * Both predate the pagination work and neither is affected by it. The fix,
+     * when it is wanted, is 22% -> 24% here and 40% -> 38% on the description
+     * column: that buys ~0.9mm of headroom, enough for any five-figure total,
+     * and costs 1.4mm of description width on every receipt the shop prints -
+     * which is enough to push a twenty-line invoice onto a second page, so it is
+     * a decision about paper, not a bug to be quietly fixed.
+     */
     th:nth-child(1),
     td:nth-child(1) {
       width: 40%;
@@ -876,6 +924,13 @@ export function generateInvoiceHTML(
 
         width: ${widthMm}mm;
 
+        max-width: ${widthMm}mm;
+
+        /*
+         * Not "0 auto": centring only matters when something is narrower than
+         * the page, and on paper that slack is a blank band down either side.
+         * The 4mm of clear paper the head needs is the body padding below.
+         */
         margin: 0;
 
         padding: 0;
@@ -1112,7 +1167,7 @@ export function generateInvoiceHTML(
 
   <script>
 
-    ${pageSizingScript(widthMm)}
+    ${pageSizingScript(widthMm, maxPageMm)}
 
   </script>
 
