@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { Download, Printer, X } from 'lucide-react';
 import { Sale, SaleItem } from '../../types';
 import {
-  RECEIPT_PREVIEW_FRAME_WIDTH_PX,
   generateInvoiceHTML,
   printInvoiceWithAlert,
+  receiptFrameWidthPx,
 } from '../../lib/invoices';
 import { downloadInvoicePdf } from '../../lib/invoicePdf';
 
@@ -57,7 +57,7 @@ function ReceiptFrame({ html }: { html: string }) {
       srcDoc={html}
       title="Invoice preview"
       className="mx-auto bg-white shadow-lg"
-      style={{ width: RECEIPT_PREVIEW_FRAME_WIDTH_PX, height }}
+      style={{ width: receiptFrameWidthPx(), height }}
     />
   );
 }

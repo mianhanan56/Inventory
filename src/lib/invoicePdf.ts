@@ -1,10 +1,10 @@
 import { createElement } from 'react';
 import { Sale, SaleItem } from '../types';
 import {
-  PAPER_WIDTH_MM,
-  RECEIPT_PREVIEW_WIDTH_PX,
   generateInvoiceHTML,
+  getThermalPaperWidthMm,
   rasteriseReceiptHtml,
+  receiptWidthPx,
 } from './invoices';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -19,8 +19,13 @@ import {
    the first is the one that has to be right.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** Points per millimetre - the PDF unit. */
-const PT_PER_MM = 80 / 25.4;
+/**
+ * Points per millimetre - the PDF unit. A PDF point is 1/72 inch, so this is
+ * 72/25.4. It is NOT the paper width and must never be edited to match one:
+ * setting it to 80 stretched every page to 88.9mm, which the printer then had
+ * to shrink back down, costing width on the paper.
+ */
+const PT_PER_MM = 72 / 25.4;
 
 /**
  * Raster density as a multiple of CSS pixels. 2x puts roughly 192dpi on the
@@ -52,8 +57,12 @@ export class PdfError extends Error {
  * printer gets, not a second rendering of the same data.
  */
 export async function renderInvoicePdf(sale: Sale, items: SaleItem[]): Promise<Blob> {
+  // The same width the slip prints at, so the PDF is not a different shape from
+  // the paper - and so printing the PDF needs no scaling either.
+  const widthMm = getThermalPaperWidthMm();
+
   const raster = await rasteriseReceiptHtml(generateInvoiceHTML(sale, items), {
-    widthPx: RECEIPT_PREVIEW_WIDTH_PX,
+    widthPx: receiptWidthPx(widthMm),
     scale: RASTER_SCALE,
     mimeType: 'image/jpeg',
     quality: JPEG_QUALITY,
@@ -61,9 +70,9 @@ export async function renderInvoicePdf(sale: Sale, items: SaleItem[]): Promise<B
     throw new PdfError('The invoice could not be rendered for export.', err);
   });
 
-  // The raster is the whole page, so the page is the raster: same 80mm width,
-  // height straight off the image's own aspect ratio.
-  const pageWidthPt = PAPER_WIDTH_MM * PT_PER_MM;
+  // The raster is the whole page, so the page is the raster: same width, height
+  // straight off the image's own aspect ratio.
+  const pageWidthPt = widthMm * PT_PER_MM;
   const pageHeightPt = pageWidthPt * (raster.heightPx / raster.widthPx);
 
   // Loaded on demand: the PDF engine is far bigger than the rest of the app and
