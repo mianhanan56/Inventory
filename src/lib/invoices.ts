@@ -40,11 +40,11 @@ import { LOGO_DATA_URI } from "./logo";
    it prints:
 
      Margins              None  (or Default - @page sets margin: 0 either way)
-     Paper size           the 80mm form the printer is loaded with; the roll
-                                form (80 x 3276mm / Roll Paper / Receipt) lets
-                                a long invoice print as one continuous slip
-                                instead of over several pages - raise
-                                MAX_PAGE_LENGTH_MM to match if it is selected
+     Paper size           the roll form: 100 x 3276mm, listed as Roll Paper or
+                                Receipt. THIS ONE IS NOT COSMETIC - it has to
+                                agree with DEFAULT_PAGE_LENGTH_MM below, and a
+                                till left on the driver's stock 297mm form is
+                                how long receipts come out narrow.
      Background graphics  On    (off drops the header and totals rules)
      Headers and footers  Off   (on prints the URL, date and "1/1" on the roll)
      Layout               Portrait
@@ -56,18 +56,18 @@ import { LOGO_DATA_URI } from "./logo";
 /* ──────────────────────────────────────────────────────────────────────────
    PAGE WIDTH
 
-   The page is the paper: 80mm, the size the client's printer is set to.
+   The page is the paper: 100mm, the size the client's printer is set to.
 
-   The ink is narrower, and on purpose. The roll is 80mm but the head of an
-   80mm unit spans 576 dots at 8 dots/mm = 72mm, the paper guides covering the
+   The ink is narrower, and on purpose. The roll is 100mm but the head of an
+   100mm unit spans 576 dots at 8 dots/mm = 72mm, the paper guides covering the
    ~4mm each side - measured on the client's Xprinter XP-Q200 and true of the
-   class. So the page is the full 80mm and SIDE_MARGIN_MM holds the printed
+   class. So the page is the full 100mm and SIDE_MARGIN_MM holds the printed
    block to the middle 72mm, which puts the ink exactly on the dots the head
    has and the blank exactly where it has none. That is the whole of the paper
    it is possible to print on.
 
    Do not "fix" this by making the page 72mm. It looks equivalent and is not:
-   an 80mm form with a 72mm page leaves the driver to place a page smaller than
+   an 100mm form with a 72mm page leaves the driver to place a page smaller than
    its paper, and Chrome at margins-none measures from the paper edge, so the
    left 4mm of the receipt lands under the guide and is lost. Page = form,
    margins = the head's dead zone. Both numbers describe the hardware; neither
@@ -75,16 +75,16 @@ import { LOGO_DATA_URI } from "./logo";
    ────────────────────────────────────────────────────────────────────────── */
 
 /** The paper the client prints on, and the page size the CSS is written to. */
-export const PAPER_WIDTH_MM = 80;
+export const PAPER_WIDTH_MM = 100;
 
 /**
- * Clear paper down each side, as page padding inside the 80mm page.
+ * Clear paper down each side, as page padding inside the 100mm page.
  *
  * 4mm keeps the ink band at 72mm, which is the span of the head on a standard
- * 80mm unit, so nothing sits in the strip under the paper guides where a printer
+ * 100mm unit, so nothing sits in the strip under the paper guides where a printer
  * cannot lay ink down. It is spacing on a full-width page, not a narrower page.
  */
-export const SIDE_MARGIN_MM = 4;
+export const SIDE_MARGIN_MM = 1;
 
 /** Page width used until setThermalPaperWidthMm() says otherwise. */
 export const DEFAULT_PAPER_WIDTH_MM = PAPER_WIDTH_MM;
@@ -170,11 +170,14 @@ const PAGE_TAIL_MM = 2;
    and took the width with it. It has nothing to do with which printer is
    attached, which is why a second printer on a second PC did it too.
 
-   The width is not negotiable and the height is, so "one page" is the one that
-   gives. The page box is never allowed past MAX_PAGE_LENGTH_MM below:
+   The width is not negotiable and the height is, so of the three it is "one
+   page" that has to be able to give. The page box is never allowed past
+   DEFAULT_PAGE_LENGTH_MM below:
 
-     content within the cap  one page, cut exactly to the content. The common
-                             case - no paper wasted, nothing split.
+     content within the cap  one page, cut exactly to the content. On the roll
+                             form the cap is 3276mm, so this is every receipt
+                             the shop will ever print - one continuous slip, no
+                             paper wasted, nothing split, nothing scaled.
      content past the cap    spread over the fewest pages that keep each one
                              inside the cap, and spread evenly so the last page
                              is as full as the first. Every page is smaller than
@@ -182,32 +185,46 @@ const PAGE_TAIL_MM = 2;
                              and the ink band is the same 72mm on a one-line
                              slip and a hundred-line one.
 
-   Margins are zero, so consecutive pages abut: on a roll a split is just more
-   paper coming out, which is exactly the "long invoices extend vertically"
-   behaviour wanted here.
+   The second case is the safety net, not the plan. It only comes up on a till
+   whose driver is on a short form, and on these tills auto-cut is enabled, so a
+   split would be a cut through the middle of the customer's receipt. Keeping the
+   cap equal to the driver's paper is what keeps it on one piece of paper.
 
-   IF LONG RECEIPTS EVER COME OUT SMALL AGAIN, this number is why - it has been
-   raised past the sheet the driver is really set to. It is a cap on what we ask
-   for, so it is safe low and dangerous high: too low only splits a receipt that
-   need not have been split, while too high shrinks it.
+   IF LONG RECEIPTS EVER COME OUT SMALL AGAIN, this number is why - it is above
+   the sheet the driver is really set to. It is a cap on what we ask for, so it
+   is safe low and dangerous high: too low only splits a receipt that need not
+   have been split, while too high shrinks it, width and all.
    ────────────────────────────────────────────────────────────────────────── */
 
 /**
  * Longest page box to ask a driver for, in millimetres.
  *
- * 297mm is the sheet length an 80mm driver left on its stock form reports, and
- * is what the client's slips measure - so it is the length that is safe without
- * anyone having configured anything. Roughly twenty line items; past that the
- * receipt runs onto a second page rather than being squeezed onto one.
+ * ┌────────────────────────────────────────────────────────────────────────┐
+ * │ THIS MUST MATCH THE DRIVER'S  Printing preferences -> Paper size.      │
+ * │ It is the one number that can make long receipts print narrow again.   │
+ * └────────────────────────────────────────────────────────────────────────┘
  *
- * Raise it to match a driver deliberately set to a longer form and long
- * invoices go back to printing as one continuous slip: the Xprinter 80mm
- * drivers expose a `80 x 3276mm` roll form (listed as `Roll Paper` or
- * `Receipt`) which is past any real till slip. Nothing here breaks if the cap
- * is never reached. Do NOT raise it on the assumption that the form has been
- * changed - an unreached cap costs nothing, an overreached one costs the width.
+ * 3276mm is the roll form the Xprinter 100mm drivers expose, listed as
+ * `100 x 3276mm`, `Roll Paper` or `Receipt`. The client's XP-Q200 tills are set
+ * to it, so every receipt prints as ONE continuous slip cut exactly to its
+ * content - about 290 line items before even this is reached.
+ *
+ * Set to the roll length rather than the safe-anywhere 297mm specifically
+ * because these tills have auto-cut enabled: at 297mm a twenty-line invoice
+ * becomes two pages, and auto-cut would cut the customer's receipt in half
+ * between them. One page is not a preference here, it is what keeps the slip
+ * in one piece.
+ *
+ * If a till is ever put back on a fixed sheet form - or a new till is set up
+ * and left on the driver's stock form, which is 297mm - long receipts on THAT
+ * till will come out narrow, because the driver shrinks a page it cannot fit
+ * and the shrink takes the width with it. The symptom is unmistakable: short
+ * receipts correct, long ones progressively narrower with growing blank
+ * margins down both sides. The fix is to set that till's paper size to the roll
+ * form, or to lower this number to the sheet length it is really on.
+ * setThermalPageLengthMm() does the latter without a rebuild.
  */
-export const DEFAULT_PAGE_LENGTH_MM = 297;
+export const DEFAULT_PAGE_LENGTH_MM = 3276;
 
 /** Sanity bounds for the override: shorter than the tallest single block cannot
  *  be paginated into, longer than the roll form cannot be printed at all. */
@@ -519,8 +536,8 @@ export function generateInvoiceHTML(
     body {
 
       /*
-       * The page is the paper: 80mm. The side spacing is padding inside it
-       * (box-sizing is border-box, so the page stays 80mm).
+       * The page is the paper: 100mm. The side spacing is padding inside it
+       * (box-sizing is border-box, so the page stays 100mm).
        *
        * max-width as well as width, so no amount of content can push the block
        * wider than the paper - a page wider than the sheet is one the driver
@@ -557,7 +574,7 @@ export function generateInvoiceHTML(
      * Margins only - no size. pageSizingScript() adds the size, with the height
      * measured off the rendered content.
      *
-     * Deliberately not "size: 80mm auto": "&lt;length> auto" is not a legal
+     * Deliberately not "size: 100mm auto": "&lt;length> auto" is not a legal
      * value for size (it takes one length, two lengths, or the keyword auto
      * alone), so Chrome drops the whole declaration and the rule silently
      * becomes this one. Stating it outright means the fallback is the one we
@@ -1331,7 +1348,7 @@ async function mountReceiptFrame(
     "top:0",
 
     /*
-     * The iframe is intentionally wider than the 80mm receipt.
+     * The iframe is intentionally wider than the 100mm receipt.
      *
      * This prevents the iframe itself from causing horizontal reflow.
      *
