@@ -40,7 +40,7 @@ import { LOGO_DATA_URI } from "./logo";
    it prints:
 
      Margins              None  (or Default - @page sets margin: 0 either way)
-     Paper size           the roll form: 100 x 3276mm, listed as Roll Paper or
+     Paper size           the roll form: 80 x 3276mm, listed as Roll Paper or
                                 Receipt. THIS ONE IS NOT COSMETIC - it has to
                                 agree with DEFAULT_PAGE_LENGTH_MM below, and a
                                 till left on the driver's stock 297mm form is
@@ -56,35 +56,86 @@ import { LOGO_DATA_URI } from "./logo";
 /* ──────────────────────────────────────────────────────────────────────────
    PAGE WIDTH
 
-   The page is the paper: 100mm, the size the client's printer is set to.
+   The paper is ~79.5mm, and the head of an 80mm unit spans 576 dots at
+   8 dots/mm = 72mm, the paper guides covering the ~4mm each side - measured on
+   the client's Xprinter XP-Q200 and true of the class. So 72mm is the whole of
+   the paper it is possible to print on, whatever page size is asked for.
 
-   The ink is narrower, and on purpose. The roll is 100mm but the head of an
-   100mm unit spans 576 dots at 8 dots/mm = 72mm, the paper guides covering the
-   ~4mm each side - measured on the client's Xprinter XP-Q200 and true of the
-   class. So the page is the full 100mm and SIDE_MARGIN_MM holds the printed
-   block to the middle 72mm, which puts the ink exactly on the dots the head
-   has and the blank exactly where it has none. That is the whole of the paper
-   it is possible to print on.
+   The page asked for is NOT always that 80mm now - see PAGE SIZE BY ITEM COUNT
+   below, which puts receipts over 15 items on a 100mm page. A page wider than
+   the paper is one the driver shrinks to fit, so on those receipts the 72mm of
+   head carries a scaled-down copy of a 100mm page rather than a 1:1 80mm one.
 
-   Do not "fix" this by making the page 72mm. It looks equivalent and is not:
-   an 100mm form with a 72mm page leaves the driver to place a page smaller than
-   its paper, and Chrome at margins-none measures from the paper edge, so the
-   left 4mm of the receipt lands under the guide and is lost. Page = form,
-   margins = the head's dead zone. Both numbers describe the hardware; neither
-   is a preference.
+   At 80mm the rule is: page = form, SIDE_MARGIN_MM = the head's dead zone, and
+   the ink lands exactly on the dots the head has. Do not instead make the page
+   72mm - it looks equivalent and is not: an 80mm form with a 72mm page leaves
+   the driver to place a page smaller than its paper, and Chrome at margins-none
+   measures from the paper edge, so the left 4mm of the receipt lands under the
+   guide and is lost.
    ────────────────────────────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────────────────────────────
+   PAGE SIZE BY ITEM COUNT
+
+   Requested behaviour: a receipt of 15 items or fewer prints on an 80mm page
+   with a 297mm length cap, and anything longer prints on a 100mm page with a
+   3276mm cap.
+
+   Recorded here because it is the one thing in this file that deliberately
+   makes the page size depend on how many items are on the receipt, and the
+   measurements say what that costs on the client's XP-Q200:
+
+     the head          576 dots at 8 dots/mm = 72mm of printable width, on
+                       ~79.5mm paper, so ~4mm down each side has no dots
+     80mm page         printed at 1:1 - the page is the paper, no scaling
+     100mm page        the driver cannot print a page wider than its paper, so
+                       it shrinks the whole page by 80/100. Measured: ink runs
+                       0.71mm to 79.37mm against a head reaching 4mm to 76mm,
+                       so 3.29mm is lost off the left of every description and
+                       3.37mm off the right of every line total - the cents.
+                       Type also comes out 20% smaller, being the same shrink.
+
+   So above 15 items the slip prints smaller with both edges trimmed. The way
+   to get those extra characters per line without losing the edges is to keep
+   the page at 80mm and reduce the font sizes instead - 72mm of head at 80%
+   type is the same 90mm of layout the 100mm page buys - but that is not what
+   was asked for here, and the fonts are deliberately left alone.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Item count at or below which the narrow page and short cap are used. */
+export const PAGE_SIZE_ITEM_THRESHOLD = 15;
+
+/** Page for a receipt of PAGE_SIZE_ITEM_THRESHOLD items or fewer. */
+export const NARROW_PAPER_WIDTH_MM = 80;
+
+/** Page for a receipt of more than PAGE_SIZE_ITEM_THRESHOLD items. */
+export const WIDE_PAPER_WIDTH_MM = 100;
+
 /** The paper the client prints on, and the page size the CSS is written to. */
-export const PAPER_WIDTH_MM = 100;
+export const PAPER_WIDTH_MM = WIDE_PAPER_WIDTH_MM;
 
 /**
- * Clear paper down each side, as page padding inside the 100mm page.
+ * Clear paper down each side, as page padding inside the page.
  *
- * 4mm keeps the ink band at 72mm, which is the span of the head on a standard
- * 100mm unit, so nothing sits in the strip under the paper guides where a printer
- * cannot lay ink down. It is spacing on a full-width page, not a narrower page.
+ * At 4mm on an 80mm page this holds the ink to the middle 72mm, which is the
+ * span of the head on a standard 80mm unit, so nothing sits in the strip under
+ * the paper guides where a printer cannot lay ink down.
+ *
+ * It is 1mm, so the ink band is 78mm on the 80mm page and 98mm on the 100mm one
+ * (the latter shrunk to 78.4mm by the driver). Neither is 72mm, so BOTH pages
+ * put ink outside what the head can reach. Measured on 80mm paper:
+ *
+ *              at 1mm                     at 4mm
+ *   <=15 items 3.3mm lost each side       0 - ink lands on 4.0mm..76.0mm, the
+ *                                         head's dots exactly
+ *   >15 items  3.3mm lost each side       1.2mm lost each side
+ *
+ * So 4mm is strictly better on both, and exact on the narrow page. It is left at
+ * 1mm because only the item-count condition was asked for; this is the number to
+ * change if the printed slips come back with the cents or the first letters of
+ * descriptions missing.
  */
-export const SIDE_MARGIN_MM = 1;
+export const SIDE_MARGIN_MM = 2;
 
 /** Page width used until setThermalPaperWidthMm() says otherwise. */
 export const DEFAULT_PAPER_WIDTH_MM = PAPER_WIDTH_MM;
@@ -103,21 +154,38 @@ const MIN_PAPER_WIDTH_MM = 50;
 const MAX_PAPER_WIDTH_MM = PAPER_WIDTH_MM;
 
 /**
- * The page width used for printing, previewing and PDF export.
+ * An explicit page width, or null to size the page from the item count.
  *
  * Deliberately not persisted anywhere: a stored value would silently outlive a
  * change to the default and leave one machine printing at a width nobody chose.
  */
-let thermalPaperWidthMm: number = DEFAULT_PAPER_WIDTH_MM;
+let thermalPaperWidthMm: number | null = null;
 
-export function getThermalPaperWidthMm(): number {
-  return thermalPaperWidthMm;
+/**
+ * The page width used for printing, previewing and PDF export.
+ *
+ * Pass the receipt's item count to get the width the item-count rule calls for.
+ * Called without one it answers for the wide page, which is what an unknown
+ * (i.e. possibly long) receipt has to be sized for - so a caller that forgets
+ * to pass the count lays out too wide rather than too narrow, and too wide is
+ * merely shrunk by the driver where too narrow would be clipped by it.
+ *
+ * An explicit setThermalPaperWidthMm() always wins over the rule.
+ */
+export function getThermalPaperWidthMm(
+  itemCount: number = Number.POSITIVE_INFINITY,
+): number {
+  if (thermalPaperWidthMm !== null) return thermalPaperWidthMm;
+  return itemCount <= PAGE_SIZE_ITEM_THRESHOLD ? NARROW_PAPER_WIDTH_MM : WIDE_PAPER_WIDTH_MM;
 }
 
-/** Override the print width in mm, or pass null to go back to the default. */
+/**
+ * Override the print width in mm, or pass null to go back to sizing the page
+ * from the item count.
+ */
 export function setThermalPaperWidthMm(mm: number | null): void {
   if (mm === null) {
-    thermalPaperWidthMm = DEFAULT_PAPER_WIDTH_MM;
+    thermalPaperWidthMm = null;
     return;
   }
   if (!Number.isFinite(mm)) return;
@@ -204,16 +272,18 @@ const PAGE_TAIL_MM = 2;
  * │ It is the one number that can make long receipts print narrow again.   │
  * └────────────────────────────────────────────────────────────────────────┘
  *
- * 3276mm is the roll form the Xprinter 100mm drivers expose, listed as
- * `100 x 3276mm`, `Roll Paper` or `Receipt`. The client's XP-Q200 tills are set
- * to it, so every receipt prints as ONE continuous slip cut exactly to its
- * content - about 290 line items before even this is reached.
+ * 3276mm is the roll form the Xprinter 80mm drivers expose, listed as
+ * `80 x 3276mm`, `Roll Paper` or `Receipt`. The client's XP-Q200 tills are set
+ * to it, so a receipt on this cap prints as ONE continuous slip cut exactly to
+ * its content - about 290 line items before even this is reached.
  *
- * Set to the roll length rather than the safe-anywhere 297mm specifically
- * because these tills have auto-cut enabled: at 297mm a twenty-line invoice
- * becomes two pages, and auto-cut would cut the customer's receipt in half
- * between them. One page is not a preference here, it is what keeps the slip
- * in one piece.
+ * Used for receipts of more than PAGE_SIZE_ITEM_THRESHOLD items. Receipts at or
+ * under it get SHORT_PAGE_LENGTH_MM instead, as asked for - which for those
+ * receipts is the same output either way, because a 15-item slip is around
+ * 260mm and so never reaches either cap. The two differ only if a short receipt
+ * runs past 297mm (many long, wrapping descriptions), and then the short cap
+ * splits it over two pages - which on these tills, with auto-cut enabled, is a
+ * cut through the middle of the customer's receipt.
  *
  * If a till is ever put back on a fixed sheet form - or a new till is set up
  * and left on the driver's stock form, which is 297mm - long receipts on THAT
@@ -224,7 +294,16 @@ const PAGE_TAIL_MM = 2;
  * form, or to lower this number to the sheet length it is really on.
  * setThermalPageLengthMm() does the latter without a rebuild.
  */
-export const DEFAULT_PAGE_LENGTH_MM = 3276;
+export const LONG_PAGE_LENGTH_MM = 3276;
+
+/**
+ * Cap for a receipt of PAGE_SIZE_ITEM_THRESHOLD items or fewer.
+ *
+ * 297mm is the sheet length an 80mm driver reports when left on its stock form.
+ */
+export const SHORT_PAGE_LENGTH_MM = 297;
+
+export const DEFAULT_PAGE_LENGTH_MM = LONG_PAGE_LENGTH_MM;
 
 /** Sanity bounds for the override: shorter than the tallest single block cannot
  *  be paginated into, longer than the roll form cannot be printed at all. */
@@ -238,10 +317,23 @@ const MAX_PAGE_LENGTH_MM = 3276;
  * would outlive a change to the default and leave one machine printing to a
  * sheet length nobody chose.
  */
-let thermalPageLengthMm: number = DEFAULT_PAGE_LENGTH_MM;
+let thermalPageLengthMm: number | null = null;
 
-export function getThermalPageLengthMm(): number {
-  return thermalPageLengthMm;
+/**
+ * The page-length cap used for printing.
+ *
+ * Pass the receipt's item count for the cap the item-count rule calls for.
+ * Without one it answers with the long cap, which is the safe way to be wrong:
+ * a cap above the paper only ever splits a receipt that need not have been
+ * split, where one below it shrinks the receipt, width and all.
+ *
+ * An explicit setThermalPageLengthMm() always wins over the rule.
+ */
+export function getThermalPageLengthMm(
+  itemCount: number = Number.POSITIVE_INFINITY,
+): number {
+  if (thermalPageLengthMm !== null) return thermalPageLengthMm;
+  return itemCount <= PAGE_SIZE_ITEM_THRESHOLD ? SHORT_PAGE_LENGTH_MM : LONG_PAGE_LENGTH_MM;
 }
 
 /**
@@ -252,7 +344,7 @@ export function getThermalPageLengthMm(): number {
  */
 export function setThermalPageLengthMm(mm: number | null): void {
   if (mm === null) {
-    thermalPageLengthMm = DEFAULT_PAGE_LENGTH_MM;
+    thermalPageLengthMm = null;
     return;
   }
   if (!Number.isFinite(mm)) return;
@@ -458,8 +550,9 @@ function pageSizingScript(widthMm: number, maxPageMm: number): string {
 export function generateInvoiceHTML(
   sale: Sale,
   items: SaleItem[],
-  widthMm: number = getThermalPaperWidthMm(),
-  maxPageMm: number = getThermalPageLengthMm(),
+  /* Both default off the item count - see PAGE SIZE BY ITEM COUNT at the top. */
+  widthMm: number = getThermalPaperWidthMm(items.length),
+  maxPageMm: number = getThermalPageLengthMm(items.length),
 ) {
 
   const fmt = (v: number) =>
@@ -1678,11 +1771,12 @@ export function printInvoice(
   items: SaleItem[],
 ): Promise<void> {
 
+  /* No width argument: generateInvoiceHTML sizes the page from the item count.
+     Passing one here would have pinned every receipt to the wide page. */
   return printReceiptHtml(
     generateInvoiceHTML(
       sale,
       items,
-      getThermalPaperWidthMm(),
     ),
   );
 }

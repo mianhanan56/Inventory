@@ -4,6 +4,7 @@ import { Download, Printer, X } from 'lucide-react';
 import { Sale, SaleItem } from '../../types';
 import {
   generateInvoiceHTML,
+  getThermalPaperWidthMm,
   printInvoiceWithAlert,
   receiptFrameWidthPx,
 } from '../../lib/invoices';
@@ -23,7 +24,7 @@ const SETTLE_DELAY_MS = 400;
  * sixty line items through a nested scroll is exactly what made the old flow
  * unusable. One frame, one scrollbar, top to bottom.
  */
-function ReceiptFrame({ html }: { html: string }) {
+function ReceiptFrame({ html, widthMm }: { html: string; widthMm: number }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(INITIAL_PREVIEW_HEIGHT_PX);
 
@@ -57,7 +58,7 @@ function ReceiptFrame({ html }: { html: string }) {
       srcDoc={html}
       title="Invoice preview"
       className="mx-auto bg-white shadow-lg"
-      style={{ width: receiptFrameWidthPx(), height }}
+      style={{ width: receiptFrameWidthPx(widthMm), height }}
     />
   );
 }
@@ -164,7 +165,7 @@ export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePre
         </div>
 
         <div className="flex-1 overflow-y-auto bg-navy-700 py-4">
-          <ReceiptFrame html={html} />
+          <ReceiptFrame html={html} widthMm={getThermalPaperWidthMm(items.length)} />
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 py-3 bg-navy-800 border-t border-navy-600/30">

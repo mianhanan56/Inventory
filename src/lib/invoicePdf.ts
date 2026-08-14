@@ -59,7 +59,12 @@ export class PdfError extends Error {
 export async function renderInvoicePdf(sale: Sale, items: SaleItem[]): Promise<Blob> {
   // The same width the slip prints at, so the PDF is not a different shape from
   // the paper - and so printing the PDF needs no scaling either.
-  const widthMm = getThermalPaperWidthMm();
+  //
+  // The item count is load-bearing: the page width now depends on it, so asking
+  // without it would size the raster to the wide page while generateInvoiceHTML
+  // laid the receipt out on the narrow one, and the picture would not match the
+  // capture box.
+  const widthMm = getThermalPaperWidthMm(items.length);
 
   const raster = await rasteriseReceiptHtml(generateInvoiceHTML(sale, items), {
     widthPx: receiptWidthPx(widthMm),
