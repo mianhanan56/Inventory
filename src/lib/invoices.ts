@@ -15,11 +15,16 @@ import { LOGO_DATA_URI } from "./logo";
    settings screen) without touching this file again.
 
    HEIGHT:
-   The receipt height is calculated dynamically from the actual rendered
-   content and written into an @page rule (see pageSizingScript() below), so
-   the roll is cut just after the last line instead of at the end of a fixed
-   sheet. Capped, though - see PAGE LENGTH below. Past the cap the receipt
-   runs onto further pages; it is never scaled to fit one.
+   The receipt height comes from the item count - a measured table of page
+   lengths for 1..30 items, see PAGE LENGTH BY ITEM COUNT below - raised to the
+   rendered content height when the descriptions on a sale wrap further than the
+   table assumes. That length is written into an @page rule by
+   pageSizingScript(), so the roll is cut just after the last line instead of at
+   the end of a fixed sheet.
+
+   The receipt is ONE page. It is never scaled to fit and never split, and the
+   only thing that can still split it is a till pinned to a fixed sheet form -
+   see DEFAULT_PAGE_LENGTH_MM, where the choice is a cut or a shrink.
 
    PRINTING:
    Printing goes through the browser's own print dialog on a hidden iframe -
@@ -41,16 +46,23 @@ import { LOGO_DATA_URI } from "./logo";
 
      Margins              None  (or Default - @page sets margin: 0 either way)
      Paper size           the roll form: 80 x 3276mm, listed as Roll Paper or
-                                Receipt. THIS ONE IS NOT COSMETIC - it has to
-                                agree with DEFAULT_PAGE_LENGTH_MM below, and a
-                                till left on the driver's stock 297mm form is
-                                how long receipts come out narrow.
+                                Receipt. THIS ONE IS NOT COSMETIC, AND IT IS THE
+                                FIRST THING TO CHECK on any complaint about the
+                                length of the paper. A fixed sheet form is fed in
+                                full whatever page box this file asks for, so
+                                every slip comes out the same length whatever is
+                                on it - short sales with a blank tail, long ones
+                                shrunk to fit and therefore narrow. No page
+                                length computed here can shorten a fixed form.
      Background graphics  On    (off drops the header and totals rules)
-     Headers and footers  Off   (on prints the URL, date and "1/1" on the roll)
+     Headers and footers  Off   (on prints the URL, the date and "1/1" on the
+                                customer's receipt, and reserves the paper they
+                                sit on)
      Layout               Portrait
 
    The numbers that matter are PAPER_WIDTH_MM / SIDE_MARGIN_MM (the 72mm ink
-   band) and DEFAULT_PAGE_LENGTH_MM (the page-length cap).
+   band), RECEIPT_PAGE_LENGTH_MM (the page length per item count) and
+   DEFAULT_PAGE_LENGTH_MM (the ceiling on both).
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -109,7 +121,7 @@ export const PAGE_SIZE_ITEM_THRESHOLD = 15;
 export const NARROW_PAPER_WIDTH_MM = 80;
 
 /** Page for a receipt of more than PAGE_SIZE_ITEM_THRESHOLD items. */
-export const WIDE_PAPER_WIDTH_MM = 100;
+export const WIDE_PAPER_WIDTH_MM = 110;
 
 /** The paper the client prints on, and the page size the CSS is written to. */
 export const PAPER_WIDTH_MM = WIDE_PAPER_WIDTH_MM;
@@ -220,98 +232,177 @@ export function receiptFrameWidthPx(widthMm?: number): number {
 const PAGE_TAIL_MM = 2;
 
 /* ──────────────────────────────────────────────────────────────────────────
-   PAGE LENGTH  ---  as long as the listing, and NEVER scaled to fit.
+   PAGE LENGTH  ---  one page, stepped by item count, NEVER scaled to fit.
 
-   Three things want to hold at once, and only two of them can:
+   Three things want to hold at once:
 
      paper used = list - the slip is as long as its content, no blank tail
      true width        - the ink spans the page, not a shrunken copy of it
      one page          - never split, whatever the item count
 
-   The trap is that a page longer than the driver's paper does not print long.
-   Asked for one, the driver reconciles it with the sheet by shrinking it to
-   fit - and shrinking is uniform, so the width goes down with the height. A
-   392mm page (30 items) on a 297mm sheet comes back at 297/392 = 76%, so the
-   72mm ink band prints as 55mm with 12mm of blank down either side; 60 items
-   land at 32mm. That is the whole of the "receipts get narrow when there are
-   many products" report. The width never grew - the height outgrew the sheet
-   and took the width with it. It has nothing to do with which printer is
-   attached, which is why a second printer on a second PC did it too.
+   All three hold now. The receipt is never paginated and never scaled: the page
+   box is set to a length that comes from the item count (RECEIPT_PAGE_LENGTH_MM
+   below), raised to the measured content height if the descriptions on this
+   particular sale wrap further than the table assumes.
 
-   The width is not negotiable and the height is, so of the three it is "one
-   page" that has to be able to give. The page box is never allowed past
-   DEFAULT_PAGE_LENGTH_MM below:
+   WHY BOTH, AND NOT JUST ONE OR THE OTHER
 
-     content within the cap  one page, cut exactly to the content. On the roll
-                             form the cap is 3276mm, so this is every receipt
-                             the shop will ever print - one continuous slip, no
-                             paper wasted, nothing split, nothing scaled.
-     content past the cap    spread over the fewest pages that keep each one
-                             inside the cap, and spread evenly so the last page
-                             is as full as the first. Every page is smaller than
-                             the sheet, so the driver's fit is always a no-op
-                             and the ink band is the same 72mm on a one-line
-                             slip and a hundred-line one.
+   The item count alone cannot know the page length, because a line item is not a
+   fixed height. The description column is 40% of a 76mm band at 13px, so a name
+   wraps to one, two or three lines, and a row is 6.2mm, 10.4mm or 14.5mm
+   accordingly. Measured across 1-30 items (headless Chrome, this layout, 80mm
+   page - see the table below):
 
-   The second case is the safety net, not the plan. It only comes up on a till
-   whose driver is on a short form, and on these tills auto-cut is enabled, so a
-   split would be a cut through the middle of the customer's receipt. Keeping the
-   cap equal to the driver's paper is what keeps it on one piece of paper.
+     30 items, one-line names      289mm
+     30 items, the client's names  380mm
+     30 items, longest names       723mm
 
-   IF LONG RECEIPTS EVER COME OUT SMALL AGAIN, this number is why - it is above
-   the sheet the driver is really set to. It is a cap on what we ask for, so it
-   is safe low and dangerous high: too low only splits a receipt that need not
-   have been split, while too high shrinks it, width and all.
+   So a table tight enough to have no blank tail on the first would cut the
+   third in half, and a table tall enough for the third would put 400mm of blank
+   paper under the first. The table is therefore set to the ONE-LINE height - the
+   least a given item count can possibly need - and the rendered content height
+   raises it from there. The step table is the floor and the guarantee; the
+   measurement is the truth, and being the larger of the two it is what normally
+   decides the page. Blank tail is never added by the table, and content is never
+   cut off by it.
+
+   WHAT MUST NEVER GO BACK IN
+
+   Scaling and splitting are both off the table:
+
+     scaling  a page longer than the driver's paper is one the driver shrinks to
+              fit, and the shrink is uniform, so the width goes down with the
+              height. A 392mm page (30 items) on a 297mm sheet comes back at 76%:
+              the 72mm ink band prints as 55mm with 12mm blank down either side.
+              That was the whole of the "receipts get narrow when there are many
+              products" report. The width never grew - the height outgrew the
+              sheet and took the width with it.
+     splitting  these tills auto-cut, so a second page is a cut through the
+              middle of the customer's receipt. There is no pagination path left
+              in pageSizingScript() at all.
+
+   Which leaves ONE requirement on the till, and it is not a code setting:
+   the driver's paper form has to be the continuous roll form. A driver on a
+   fixed sheet form prints every receipt on that whole sheet, whatever page box
+   this file asks for - which is a fixed-length slip with a blank tail on short
+   sales and a shrunken one on long sales. See DEFAULT_PAGE_LENGTH_MM.
    ────────────────────────────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────────────────────────────
+   PAGE LENGTH BY ITEM COUNT
+
+   Page length in mm for a receipt of 1..30 items, indexed by item count
+   (index 0 is unused and holds the no-items length).
+
+   These are MEASURED, not estimated: each one is the height this exact layout
+   renders to in Chrome at the 80mm page with single-line descriptions, plus
+   PAGE_TAIL_MM, rounded up. Single-line is deliberate - see PAGE LENGTH above.
+   The fixed part of a receipt is 99.3mm of it (header 42.6, column headings 8.7,
+   totals 18.4, returns policy 16.2, .invoice padding 6.0, block margins 7.4) and
+   each further single-line item adds 6.24mm.
+
+   Re-measure and re-tabulate whenever the header, the fonts, the column widths
+   or the returns policy change. The two reference points for that, on the same
+   layout and the client's own product names, are 15 items = 241mm and 30 items =
+   380mm; if a re-measure of the one-line table lands near those, the table has
+   been filled in with the wrong mix.
+
+   Requested breakpoints, for reading against the printed slips:
+
+     items    page      items    page
+      1-2     108-115   13-15    183-196
+      3-5     121-133   16-20    202-227
+      6-8     140-152   21-25    233-258
+      9-12    158-177   26-30    264-289
+   ────────────────────────────────────────────────────────────────────────── */
+
+const RECEIPT_PAGE_LENGTH_MM: readonly number[] = [
+  /*  0 */ 102,
+  /*  1 */ 108, /*  2 */ 115, /*  3 */ 121, /*  4 */ 127, /*  5 */ 133,
+  /*  6 */ 140, /*  7 */ 146, /*  8 */ 152, /*  9 */ 158, /* 10 */ 165,
+  /* 11 */ 171, /* 12 */ 177, /* 13 */ 183, /* 14 */ 190, /* 15 */ 196,
+  /* 16 */ 202, /* 17 */ 208, /* 18 */ 214, /* 19 */ 221, /* 20 */ 227,
+  /* 21 */ 233, /* 22 */ 239, /* 23 */ 246, /* 24 */ 252, /* 25 */ 258,
+  /* 26 */ 264, /* 27 */ 271, /* 28 */ 277, /* 29 */ 283, /* 30 */ 289,
+];
+
+/** Highest item count the table covers. */
+export const RECEIPT_PAGE_LENGTH_TABLE_MAX_ITEMS = RECEIPT_PAGE_LENGTH_MM.length - 1;
+
 /**
- * Longest page box to ask a driver for, in millimetres.
+ * Page length added per item past the end of the table, in mm.
+ *
+ * The measured single-line row is 6.24mm; this is rounded up so the extrapolation
+ * stays a floor rather than drifting under one.
+ */
+const RECEIPT_ROW_LENGTH_MM = 7;
+
+/**
+ * The page length for a receipt of `itemCount` items, in mm - the floor the
+ * printed page is never shorter than.
+ *
+ * Past the end of the table it continues at RECEIPT_ROW_LENGTH_MM an item, and
+ * it is never allowed past MAX_PAGE_LENGTH_MM (the roll form), because a page
+ * longer than the paper is a page the driver shrinks, width and all.
+ */
+export function receiptPageLengthMm(itemCount: number): number {
+  const n = Number.isFinite(itemCount) ? Math.max(0, Math.floor(itemCount)) : 0;
+
+  const mm =
+    n <= RECEIPT_PAGE_LENGTH_TABLE_MAX_ITEMS
+      ? RECEIPT_PAGE_LENGTH_MM[n]
+      : RECEIPT_PAGE_LENGTH_MM[RECEIPT_PAGE_LENGTH_TABLE_MAX_ITEMS] +
+        (n - RECEIPT_PAGE_LENGTH_TABLE_MAX_ITEMS) * RECEIPT_ROW_LENGTH_MM;
+
+  return Math.min(mm, MAX_PAGE_LENGTH_MM);
+}
+
+/**
+ * Longest page box that may ever be asked of a driver, in millimetres.
  *
  * ┌────────────────────────────────────────────────────────────────────────┐
- * │ THIS MUST MATCH THE DRIVER'S  Printing preferences -> Paper size.      │
- * │ It is the one number that can make long receipts print narrow again.   │
+ * │ THE DRIVER'S  Printing preferences -> Paper size  MUST BE THE ROLL     │
+ * │ FORM, and this must not exceed its length.                             │
  * └────────────────────────────────────────────────────────────────────────┘
  *
  * 3276mm is the roll form the Xprinter 80mm drivers expose, listed as
- * `80 x 3276mm`, `Roll Paper` or `Receipt`. The client's XP-Q200 tills are set
- * to it, so a receipt on this cap prints as ONE continuous slip cut exactly to
- * its content - about 290 line items before even this is reached.
+ * `80 x 3276mm`, `Roll Paper` or `Receipt`. It is a ceiling, not a page length -
+ * the page length is receiptPageLengthMm() raised to the content - and at
+ * ~460 line items nothing the shop prints comes near it.
  *
- * Used for receipts of more than PAGE_SIZE_ITEM_THRESHOLD items. Receipts at or
- * under it get SHORT_PAGE_LENGTH_MM instead, as asked for - which for those
- * receipts is the same output either way, because a 15-item slip is around
- * 260mm and so never reaches either cap. The two differ only if a short receipt
- * runs past 297mm (many long, wrapping descriptions), and then the short cap
- * splits it over two pages - which on these tills, with auto-cut enabled, is a
- * cut through the middle of the customer's receipt.
+ * TWO SYMPTOMS POINT STRAIGHT BACK HERE, and both are the driver's paper form
+ * rather than anything this file can compute:
  *
- * If a till is ever put back on a fixed sheet form - or a new till is set up
- * and left on the driver's stock form, which is 297mm - long receipts on THAT
- * till will come out narrow, because the driver shrinks a page it cannot fit
- * and the shrink takes the width with it. The symptom is unmistakable: short
- * receipts correct, long ones progressively narrower with growing blank
- * margins down both sides. The fix is to set that till's paper size to the roll
- * form, or to lower this number to the sheet length it is really on.
- * setThermalPageLengthMm() does the latter without a rebuild.
+ *   every slip the same length, with a blank tail on the short ones
+ *       the till is on a FIXED SHEET form (the stock form is 297mm). A fixed
+ *       form is fed in full whatever page box is asked for, so the receipt
+ *       stops where its content stops and the paper stops where the sheet does.
+ *       Set that till's paper size to the roll form.
+ *   long receipts narrower than short ones, blank down both sides
+ *       a page longer than the form, uniformly shrunk to fit it. Either set the
+ *       roll form, or call setThermalPageLengthMm() with the sheet length the
+ *       till is really on, which trades the shrink for a cut.
  */
 export const LONG_PAGE_LENGTH_MM = 3276;
 
 /**
- * Cap for a receipt of PAGE_SIZE_ITEM_THRESHOLD items or fewer.
+ * The sheet length an 80mm driver reports when left on its stock form.
  *
- * 297mm is the sheet length an 80mm driver reports when left on its stock form.
+ * Nothing is sized to it. It is the value to hand setThermalPageLengthMm() on a
+ * till found still on that form, as the stopgap until its paper size is set to
+ * the roll form.
  */
-export const SHORT_PAGE_LENGTH_MM = 297;
+export const STOCK_SHEET_LENGTH_MM = 297;
 
 export const DEFAULT_PAGE_LENGTH_MM = LONG_PAGE_LENGTH_MM;
 
-/** Sanity bounds for the override: shorter than the tallest single block cannot
- *  be paginated into, longer than the roll form cannot be printed at all. */
+/** Sanity bounds for the override: shorter than a minimal receipt cannot hold
+ *  one, longer than the roll form cannot be printed at all. */
 const MIN_PAGE_LENGTH_MM = 100;
 const MAX_PAGE_LENGTH_MM = 3276;
 
 /**
- * The page-length cap used for printing.
+ * An explicit page length, or null to take it from the item count.
  *
  * Deliberately not persisted, for the same reason as the width: a stored value
  * would outlive a change to the default and leave one machine printing to a
@@ -320,27 +411,28 @@ const MAX_PAGE_LENGTH_MM = 3276;
 let thermalPageLengthMm: number | null = null;
 
 /**
- * The page-length cap used for printing.
+ * The page length for a receipt of `itemCount` items, in mm.
  *
- * Pass the receipt's item count for the cap the item-count rule calls for.
- * Without one it answers with the long cap, which is the safe way to be wrong:
- * a cap above the paper only ever splits a receipt that need not have been
- * split, where one below it shrinks the receipt, width and all.
+ * This is the floor written into @page. pageSizingScript() raises it to the
+ * measured content height when the descriptions on this sale wrap past what the
+ * table assumes, so the returned value is what a receipt of this item count
+ * needs at minimum, never a cap on what it may have.
  *
- * An explicit setThermalPageLengthMm() always wins over the rule.
+ * An explicit setThermalPageLengthMm() always wins - that is the escape hatch
+ * for a till found on a fixed sheet form.
  */
-export function getThermalPageLengthMm(
-  itemCount: number = Number.POSITIVE_INFINITY,
-): number {
+export function getThermalPageLengthMm(itemCount: number = 0): number {
   if (thermalPageLengthMm !== null) return thermalPageLengthMm;
-  return itemCount <= PAGE_SIZE_ITEM_THRESHOLD ? SHORT_PAGE_LENGTH_MM : LONG_PAGE_LENGTH_MM;
+  return receiptPageLengthMm(itemCount);
 }
 
 /**
- * Override the page-length cap in mm, or pass null to go back to the default.
+ * Pin the page length in mm, or pass null to go back to sizing it from the item
+ * count.
  *
- * Set this to the paper form the driver is on (3276 for the Xprinter roll form)
- * to let long invoices print as a single continuous slip.
+ * Set this to the paper form a till is really on when it is not the roll form:
+ * the page can then be shorter than that sheet but never longer, so the receipt
+ * is cut rather than shrunk.
  */
 export function setThermalPageLengthMm(mm: number | null): void {
   if (mm === null) {
@@ -351,18 +443,38 @@ export function setThermalPageLengthMm(mm: number | null): void {
   thermalPageLengthMm = Math.min(MAX_PAGE_LENGTH_MM, Math.max(MIN_PAGE_LENGTH_MM, mm));
 }
 
+/**
+ * The longest page this till may be asked for, in mm.
+ *
+ * The roll form normally, or the pinned length when setThermalPageLengthMm() has
+ * named the sheet a till is really on. It is the one thing that can still stop a
+ * receipt printing on a single page, and deliberately so: past it the choice is
+ * between a cut and a shrink, and a shrink takes the width with it.
+ */
+export function receiptPageCeilingMm(): number {
+  return thermalPageLengthMm ?? LONG_PAGE_LENGTH_MM;
+}
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    RECEIPT PAGE HEIGHT
    ══════════════════════════════════════════════════════════════════════════ */
 
-function pageSizingScript(widthMm: number, maxPageMm: number): string {
+/**
+ * The script embedded in every receipt that fixes the page height.
+ *
+ * @param widthMm   the page width - never touched here, only echoed into @page
+ * @param floorMm   the item-count page length, from receiptPageLengthMm()
+ * @param ceilingMm the longest page this till may be asked for
+ */
+function pageSizingScript(widthMm: number, floorMm: number, ceilingMm: number): string {
   return `
     (function () {
 
       var PAPER_MM = ${widthMm};
       var TAIL_MM = ${PAGE_TAIL_MM};
-      var MAX_PAGE_MM = ${maxPageMm};
+      var FLOOR_MM = ${floorMm};
+      var CEILING_MM = ${ceilingMm};
       var PX_PER_MM = 96 / 25.4;
 
       var pageStyle = document.createElement('style');
@@ -380,88 +492,40 @@ function pageSizingScript(widthMm: number, maxPageMm: number): string {
       }
 
 
-      /*
-       * Height of the tallest thing that cannot be broken across a page, in mm -
-       * so, the most paper a single page break can waste.
-       *
-       * A block that will not fit in what is left of a page is pushed whole onto
-       * the next one, so the page count has to be settled against that cost or
-       * the split spills onto an unplanned extra page.
-       */
-      function tallestUnbreakableMm() {
-        var blocks = document.querySelectorAll(
-          '.invoice .header, .invoice tbody tr, .invoice .totals .row, .invoice .returns-policy'
-        );
-        var tallest = 0;
-
-        for (var i = 0; i < blocks.length; i++) {
-          var h = blocks[i].getBoundingClientRect().height;
-          if (h > tallest) tallest = h;
-        }
-
-        return tallest / PX_PER_MM;
-      }
-
-
       function sizePage() {
 
         if (!document.querySelector('.invoice')) {
           return 0;
         }
 
-        var heightMm = renderedHeightMm();
-        if (!heightMm) return 0;
-
-        var contentMm = heightMm + TAIL_MM;
-
-        /* The page is the receipt: exactly as long as what is on it, so the
-           paper used matches the listing and there is no blank tail. */
-        var pages = 1;
-        var page = Math.ceil(contentMm);
-
-        if (contentMm > MAX_PAGE_MM) {
-          /*
-           * Too long for the sheet. Spread it over pages instead of scaling it:
-           * scaling is uniform, and a uniform shrink is the narrow print this
-           * whole file exists to prevent.
-           *
-           * Split evenly rather than filling pages to the cap and leaving a
-           * near-empty last one - with zero margins the pages abut on the roll,
-           * so an even split means the paper still ends just after the footer.
-           */
-          var slackMm = tallestUnbreakableMm();
-
-          /*
-           * Each break costs a pushed block, and paying for the breaks can call
-           * for another page, which is another break. Settle it rather than
-           * solve it: the second pass is over a page count that already carries
-           * the first pass's slack, and a third has never changed the answer.
-           */
-          for (var pass = 0; pass < 2; pass++) {
-            pages = Math.ceil((contentMm + (pages - 1) * slackMm) / MAX_PAGE_MM);
-          }
-
-          page = Math.ceil((contentMm + (pages - 1) * slackMm) / pages);
-        }
+        /*
+         * The page length, in three steps.
+         *
+         * FLOOR_MM is what a receipt of this item count needs at minimum, from
+         * the measured table in PAGE LENGTH BY ITEM COUNT. The rendered height
+         * is what THIS receipt needs, which is more whenever a description
+         * wraps past one line. The page is the larger of the two, so the paper
+         * is never shorter than the content (nothing is cut, nothing is split)
+         * and never longer than it needs to be (no blank tail).
+         *
+         * Falling back to the floor when the measurement is unavailable is the
+         * point of having a table at all: a script that runs before layout, or
+         * an .invoice that measures zero, still produces a sane slip.
+         */
+        var contentMm = renderedHeightMm();
+        var neededMm = contentMm ? contentMm + TAIL_MM : 0;
+        var page = Math.ceil(Math.max(FLOOR_MM, neededMm));
 
         /*
-         * The cap is the invariant the printed width rests on, so it is enforced
-         * here rather than trusted to the arithmetic above.
-         *
-         * That arithmetic can overshoot it: the second pass can raise the page
-         * count, and the even split then divides a total that carries slack for
-         * MORE breaks than the count it is divided by was derived from. Swept
-         * over the realistic range (cap 297, tallest block 30-60mm, content up to
-         * 5000mm) that overshoots on ~15% of inputs, by up to 10mm - which is a
-         * 297mm sheet being asked for a 307mm page, i.e. the 72mm band printing
-         * at 69.6mm. Small, but it is precisely the bug this file is fixing, so
-         * it does not get to come back through the back door.
-         *
-         * Clamping can only ever add a page, never lose content: Chrome
-         * paginates whatever does not fit, and past the cap no clamp is written.
+         * The ceiling is the last word, and it is the width's guarantee: a page
+         * longer than the paper is one the driver shrinks to fit, and the shrink
+         * is uniform, so the width goes with the height. On the roll form this
+         * never bites (~460 items); on a till pinned to a fixed sheet it does,
+         * and there a cut is the lesser evil - see receiptPageCeilingMm().
          */
-        if (page > MAX_PAGE_MM) {
-          page = MAX_PAGE_MM;
+        var fits = page <= CEILING_MM;
+        if (!fits) {
+          page = CEILING_MM;
         }
 
 
@@ -472,18 +536,18 @@ function pageSizingScript(widthMm: number, maxPageMm: number): string {
           '}';
 
         /*
-         * Clamp the document to the page, but ONLY when it is a single page.
+         * Hold the document to the page, but ONLY when the content fits it.
          *
-         * On one page this is a backstop for the day a browser lays the receipt
-         * out a shade taller than it measured: the page is already tall enough
-         * for the content, so anything past it can only be a rounding sliver,
-         * and clipping a sliver beats spilling it onto a second slip.
+         * When it fits, this is the belt to the page size's braces: the page is
+         * already at least as tall as the content, so nothing here can clip
+         * anything except a sub-millimetre rounding sliver, and it stops the
+         * browser finding a reason to start a second page.
          *
-         * Past the cap, pagination is the intended outcome and a clamp is
-         * precisely the thing that prevents it - which would clip every item
-         * after the first page off the receipt entirely.
+         * When it does not fit - only reachable on a pinned short sheet - the
+         * receipt has to be allowed to paginate, and a clamp is precisely what
+         * would prevent it, clipping every item past the first page instead.
          */
-        if (pages === 1) {
+        if (fits) {
           css +=
             '@media print {' +
             '  html, body { height: ' + page + 'mm; overflow: hidden; }' +
@@ -494,8 +558,12 @@ function pageSizingScript(widthMm: number, maxPageMm: number): string {
         pageStyle.textContent = css;
 
 
+        /* Left on the window for debugging a slip that came out the wrong
+           length: the three numbers together say which of the floor, the
+           content and the ceiling decided it. */
         window.__receiptPageHeightMm = page;
-        window.__receiptPageCount = pages;
+        window.__receiptContentHeightMm = contentMm;
+        window.__receiptOnOnePage = fits;
 
         return page;
       }
@@ -550,9 +618,11 @@ function pageSizingScript(widthMm: number, maxPageMm: number): string {
 export function generateInvoiceHTML(
   sale: Sale,
   items: SaleItem[],
-  /* Both default off the item count - see PAGE SIZE BY ITEM COUNT at the top. */
+  /* Both default off the item count - see PAGE WIDTH BY ITEM COUNT and PAGE
+     LENGTH BY ITEM COUNT at the top. The length is a floor, not a cap: the
+     embedded sizing script raises it to the rendered content. */
   widthMm: number = getThermalPaperWidthMm(items.length),
-  maxPageMm: number = getThermalPageLengthMm(items.length),
+  pageLengthMm: number = getThermalPageLengthMm(items.length),
 ) {
 
   const fmt = (v: number) =>
@@ -1277,7 +1347,7 @@ export function generateInvoiceHTML(
 
   <script>
 
-    ${pageSizingScript(widthMm, maxPageMm)}
+    ${pageSizingScript(widthMm, pageLengthMm, Math.max(pageLengthMm, receiptPageCeilingMm()))}
 
   </script>
 
