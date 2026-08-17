@@ -289,41 +289,90 @@ const PAGE_TAIL_MM = 2;
    ────────────────────────────────────────────────────────────────────────── */
 
 /* ──────────────────────────────────────────────────────────────────────────
+   PAPER AVAILABLE FROM SPACING  ---  measured, and deliberately NOT taken
+
+   The receipt's length is mostly its own content, and the layout is where that
+   length is really decided. Every figure below is measured on a 30-item receipt
+   with the client's own product names, so the next person asking "can it be
+   shorter?" does not have to measure it again.
+
+   NONE OF THESE ARE APPLIED. The spacing, the fonts and the logo are to be left
+   exactly as they are - the client's instruction, and it outranks the arithmetic.
+   This is a price list, not a plan:
+
+     tbody td padding      4px -> 2px      33mm   the largest by far, being the
+                                                  only spacing paid once per item
+     .returns-policy       10px -> 6px      3mm
+     .header margins       10/8 -> 6/5px    2mm
+     .totals .row padding  2px -> 1px       2mm
+     thead th padding      4px -> 2px       1mm
+     table margin-bottom   8px -> 5px       1mm
+     logo 60px -> 34px                      7mm   changes how the slip LOOKS
+     h1 22px, address 11 -> 10px            5mm   changes how the slip LOOKS
+     returns policy 11 -> 9.5px             3mm   changes how the slip LOOKS
+
+   Taken together they would put a 30-item slip at ~336mm against the ~374mm it is
+   now, and a 1-item one at ~80mm against ~102mm.
+
+   THE ONE SPACING CHANGE THAT WAS MADE is the .invoice top and bottom padding,
+   3mm each, removed on request: it was 6mm of blank paper on every slip, most of
+   it visible as the gap above the logo. The bottom gap is now PAGE_TAIL_MM alone.
+
+   Horizontal padding is not part of this budget and must not be trimmed with it:
+   the columns are a fixed-layout table, and cell padding is what keeps the money
+   columns off each other.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ──────────────────────────────────────────────────────────────────────────
    PAGE LENGTH BY ITEM COUNT
 
    Page length in mm for a receipt of 1..30 items, indexed by item count
-   (index 0 is unused and holds the no-items length).
+   (index 0 holds the no-items length).
 
-   These are MEASURED, not estimated: each one is the height this exact layout
-   renders to in Chrome at the 80mm page with single-line descriptions, plus
-   PAGE_TAIL_MM, rounded up. Single-line is deliberate - see PAGE LENGTH above.
-   The fixed part of a receipt is 99.3mm of it (header 42.6, column headings 8.7,
-   totals 18.4, returns policy 16.2, .invoice padding 6.0, block margins 7.4) and
-   each further single-line item adds 6.24mm.
+   The series starts at 60mm for one item and continues at 5.20mm an item, which
+   is the measured height of a single-line row in this layout. 60mm was asked for
+   directly, and it is BELOW what a receipt of one item actually renders to - the
+   shortest possible one-item slip is ~95mm of content and the client's own names
+   put it at ~102mm.
 
-   Re-measure and re-tabulate whenever the header, the fonts, the column widths
-   or the returns policy change. The two reference points for that, on the same
-   layout and the client's own product names, are 15 items = 241mm and 30 items =
-   380mm; if a re-measure of the one-line table lands near those, the table has
-   been filled in with the wrong mix.
+   WHICH MEANS THIS TABLE NO LONGER DECIDES ANY PRINTED LENGTH. The page is
+   max(this, rendered content), and the content is larger at every item count from
+   1 to 30, so the content decides all of them. That is not a fault - the content
+   height is the tightest length a receipt can have without clipping, and it is
+   what these slips now print at:
 
-   Requested breakpoints, for reading against the printed slips:
+     1 item    ~102mm        15 items  ~235mm
+     5 items   ~140mm        30 items  ~374mm
+                             (client's own product names)
+
+   What the table still does is catch the case where the measurement is
+   unavailable - a script that ran before layout, an .invoice that measured zero.
+   At 60mm-and-up that fallback is now SHORTER than the receipt, so a measurement
+   failure clips rather than over-feeds. It was a measured one-line floor before
+   (95mm for one item, 245mm for thirty), which is the shape to restore if a
+   clipped receipt is ever reported with no other explanation.
+
+   To make the SLIPS shorter, this table is the wrong lever - lowering it does
+   nothing while the content is taller. PAPER AVAILABLE FROM SPACING above is the
+   right one, and it is priced out there.
+
+   The series, for reading against the printed slips:
 
      items    page      items    page
-      1-2     108-115   13-15    183-196
-      3-5     121-133   16-20    202-227
-      6-8     140-152   21-25    233-258
-      9-12    158-177   26-30    264-289
+      1-2      60-66    13-15    123-133
+      3-5      71-81    16-20    138-159
+      6-8      86-97    21-25    164-185
+      9-12    102-118   26-30    190-211
    ────────────────────────────────────────────────────────────────────────── */
 
 const RECEIPT_PAGE_LENGTH_MM: readonly number[] = [
-  /*  0 */ 102,
-  /*  1 */ 108, /*  2 */ 115, /*  3 */ 121, /*  4 */ 127, /*  5 */ 133,
-  /*  6 */ 140, /*  7 */ 146, /*  8 */ 152, /*  9 */ 158, /* 10 */ 165,
-  /* 11 */ 171, /* 12 */ 177, /* 13 */ 183, /* 14 */ 190, /* 15 */ 196,
-  /* 16 */ 202, /* 17 */ 208, /* 18 */ 214, /* 19 */ 221, /* 20 */ 227,
-  /* 21 */ 233, /* 22 */ 239, /* 23 */ 246, /* 24 */ 252, /* 25 */ 258,
-  /* 26 */ 264, /* 27 */ 271, /* 28 */ 277, /* 29 */ 283, /* 30 */ 289,
+  /*  0 */ 55,
+  /*  1 */ 60, /*  2 */ 66, /*  3 */ 71, /*  4 */ 76, /*  5 */ 81,
+  /*  6 */ 86, /*  7 */ 92, /*  8 */ 97, /*  9 */ 102, /* 10 */ 107,
+  /* 11 */ 112, /* 12 */ 118, /* 13 */ 123, /* 14 */ 128, /* 15 */ 133,
+  /* 16 */ 138, /* 17 */ 144, /* 18 */ 149, /* 19 */ 154, /* 20 */ 159,
+  /* 21 */ 164, /* 22 */ 170, /* 23 */ 175, /* 24 */ 180, /* 25 */ 185,
+  /* 26 */ 190, /* 27 */ 196, /* 28 */ 201, /* 29 */ 206, /* 30 */ 211,
 ];
 
 /** Highest item count the table covers. */
@@ -455,6 +504,34 @@ export function receiptPageCeilingMm(): number {
   return thermalPageLengthMm ?? LONG_PAGE_LENGTH_MM;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   RECEIPT_TEST_PAGE_LENGTH_MM  ---  is the page size we ask for honoured?
+
+   Every complaint about the length of these slips has two possible authors: the
+   page length this file computes, and the paper form the driver is on. They are
+   told apart by forcing a page length far shorter than the content and looking at
+   what comes out of the printer. On the till, in the app's console:
+
+       __receiptTestPageLengthMm = 60      // then print any sale
+
+     paper comes out ~60mm, receipt clipped
+         the driver honours the page size it is sent, so the length IS this
+         file's to decide, and a slip that is too long is a layout question -
+         PAPER SPENT ON SPACING above is where that is answered.
+     paper comes out the same length as before
+         the driver is feeding a fixed form and ignoring the page size. No number
+         computed here can shorten it; the till's paper form has to be the roll
+         form. See DEFAULT_PAGE_LENGTH_MM.
+
+   Clear it with `__receiptTestPageLengthMm = null` when the test is done. It
+   lives on the window rather than in this module on purpose: it can be set on a
+   deployed build from a till, with no rebuild and nothing to remove afterwards,
+   and it cannot affect a receipt printed by anyone who has not set it.
+
+   IT CLIPS. It is a diagnostic, never a way to shorten a receipt - a receipt
+   whose totals have been clipped off the bottom is worse than a long one.
+   ────────────────────────────────────────────────────────────────────────── */
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    RECEIPT PAGE HEIGHT
@@ -492,6 +569,34 @@ function pageSizingScript(widthMm: number, floorMm: number, ceilingMm: number): 
       }
 
 
+      /*
+       * DIAGNOSTIC OVERRIDE - see RECEIPT_TEST_PAGE_LENGTH_MM below the script.
+       *
+       * A page length forced from the app's console, ignoring the content:
+       *
+       *     __receiptTestPageLengthMm = 60
+       *
+       * The receipt prints on a page of exactly that length and anything past it
+       * is clipped. That is the whole point of it: it is the one way to ask the
+       * printer "do you honour the page size you are sent?" and get an answer off
+       * the paper. If a receipt forced to 60mm still comes out the length of the
+       * driver's sheet, the length was never this file's to decide.
+       *
+       * The receipt renders in an iframe, so the value is read off the parent
+       * window where the console runs. Wrapped because the read can throw if the
+       * frame is ever loaded cross-origin, and a diagnostic must not be able to
+       * break printing.
+       */
+      function testPageLengthMm() {
+        try {
+          var mm = window.parent && window.parent.__receiptTestPageLengthMm;
+          return typeof mm === 'number' && isFinite(mm) && mm > 0 ? mm : 0;
+        } catch (err) {
+          return 0;
+        }
+      }
+
+
       function sizePage() {
 
         if (!document.querySelector('.invoice')) {
@@ -526,6 +631,18 @@ function pageSizingScript(widthMm: number, floorMm: number, ceilingMm: number): 
         var fits = page <= CEILING_MM;
         if (!fits) {
           page = CEILING_MM;
+        }
+
+        /*
+         * The diagnostic override outranks all of it, content included - a test
+         * that negotiated with the content would not be testing anything. It is
+         * treated as fitting so the page is clamped and stays a single page: the
+         * question being asked is what the printer does with ONE short page.
+         */
+        var forcedMm = testPageLengthMm();
+        if (forcedMm) {
+          page = Math.ceil(forcedMm);
+          fits = true;
         }
 
 
@@ -773,7 +890,22 @@ export function generateInvoiceHTML(
 
       margin: 0 auto;
 
-      padding: 3mm 0;
+      /*
+       * No vertical padding: the logo starts on the first line of the page and
+       * the returns policy ends on the last.
+       *
+       * This was 3mm top and bottom, which is 6mm of blank paper on every slip -
+       * unmissable on a one-item sale, where it was most of what looked like an
+       * over-long receipt. The bottom gap is now PAGE_TAIL_MM and nothing else,
+       * so exactly one number decides it. The top needs none at all: @page has
+       * margin: 0, and the blank strip above the print on a finished slip is the
+       * printer's cut geometry (~10-15mm from head to cutter on an XP-Q200),
+       * which no padding here can shorten or lengthen.
+       *
+       * Horizontal padding stays 0 as well - the side clearance the head needs is
+       * SIDE_MARGIN_MM on the body, and putting it on both insets twice.
+       */
+      padding: 0;
 
       font-family:
         Arial,
@@ -1130,7 +1262,8 @@ export function generateInvoiceHTML(
 
         margin: 0;
 
-        padding: 3mm 0;
+        /* As on screen: no top gap, and PAGE_TAIL_MM is the whole bottom gap. */
+        padding: 0;
       }
     }
 
