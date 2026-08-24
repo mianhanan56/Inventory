@@ -1,4 +1,5 @@
 import { Sale, SaleItem } from "../types";
+import { notifyError } from "./errors";
 import { LOGO_DATA_URI } from "./logo";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1191,6 +1192,21 @@ export function generateInvoiceHTML(
     }
 
 
+    /* The savings note sits below the total rather than among the rows that
+       make it up: the discount is already inside Subtotal, so printing it as a
+       "- R x" line above the Total made the receipt's arithmetic read as wrong
+       to the customer (900 + 135 - 100 was shown as 1035). Smaller and
+       italicised so it reads as a note, not another term in the sum. */
+    .totals .row.saved {
+
+      font-size: 12px;
+
+      font-style: italic;
+
+      padding-top: 3px;
+    }
+
+
     /* ═════════════════════════════════════════════════════════════════════
        RETURN POLICY
        ══════════════════════════════════════════════════════════════════ */
@@ -1414,25 +1430,6 @@ export function generateInvoiceHTML(
       </div>
 
 
-      ${
-        Number(sale.discount_total) > 0
-          ? `
-        <div class="row">
-
-          <span>
-            Discount
-          </span>
-
-          <span>
-            -${fmt(Number(sale.discount_total))}
-          </span>
-
-        </div>
-      `
-          : ""
-      }
-
-
       <div class="row total">
 
         <span>
@@ -1444,6 +1441,25 @@ export function generateInvoiceHTML(
         </span>
 
       </div>
+
+
+      ${
+        Number(sale.discount_total) > 0
+          ? `
+        <div class="row saved">
+
+          <span>
+            You saved
+          </span>
+
+          <span>
+            ${fmt(Number(sale.discount_total))}
+          </span>
+
+        </div>
+      `
+          : ""
+      }
 
     </div>
 
@@ -2030,10 +2046,13 @@ export async function printInvoiceWithAlert(
     );
 
 
-    alert(
-      `Could not print invoice ${sale.invoice_number}:\n${describePrintError(
+    notifyError(
+
+      `Could not print invoice ${sale.invoice_number}`,
+
+      describePrintError(
         err,
-      )}`,
+      ),
     );
 
 

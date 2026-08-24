@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { usePersistentState } from '../../hooks/usePersistentState';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
 import Modal from '../ui/Modal';
+import { useToast } from '../ui/Toast';
 import { CreditCard, Trash2, User, Plus } from 'lucide-react';
 
 interface PaymentRecord {
@@ -15,19 +17,13 @@ interface PaymentRecord {
 const STORAGE_KEY = 'payment_records';
 
 export default function Payment() {
+  const toast = useToast();
   const [form, setForm] = useState({ name: '', phone: '' });
   const [modalOpen, setModalOpen] = useState(false);
-  const [records, setRecords] = useState<PaymentRecord[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  }, [records]);
+  // Via usePersistentState rather than a hand-rolled read + write-on-change
+  // pair: that pair persisted its own fallback [] on the first render if the
+  // read threw, wiping every payment record. See the same fix in Invoices.
+  const [records, setRecords] = usePersistentState<PaymentRecord[]>(STORAGE_KEY, []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +33,7 @@ export default function Payment() {
       { id: `${now}`, name: form.name, phone: form.phone, status: 'Unpaid', createdAt: now },
       ...records,
     ]);
+    toast.success('Payment record added', form.name);
     setForm({ name: '', phone: '' });
     setModalOpen(false);
   }
@@ -48,7 +45,9 @@ export default function Payment() {
   }
 
   function removeRecord(id: string) {
+    const removed = records.find(r => r.id === id);
     setRecords(records.filter(r => r.id !== id));
+    if (removed) toast.success('Payment record removed', removed.name);
   }
 
   return (

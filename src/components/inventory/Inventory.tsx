@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { reportError } from '../../lib/errors';
 import { StockMovement, Product } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
+import { useToast } from '../ui/Toast';
 import { Plus, Search, ArrowDown, ArrowUp, RotateCcw, Sliders, Package } from 'lucide-react';
 
 export default function Inventory() {
+  const toast = useToast();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -34,17 +37,34 @@ export default function Inventory() {
   }
 
   async function handleSave() {
+    const quantity = Number(form.quantity);
+    // An 'adjustment' sets the count to an absolute figure, so zero is a valid
+    // entry there; every other type is a movement of goods and must be positive.
+    const minimum = form.type === 'adjustment' ? 0 : 1;
+    if (!Number.isInteger(quantity) || quantity < minimum) {
+      toast.error('Quantity is not valid', form.type === 'adjustment'
+        ? 'Enter the counted quantity as a whole number (zero or more).'
+        : 'Enter a quantity of at least 1, as a whole number.');
+      return;
+    }
+
     setSaving(true);
     try {
       const user = (await supabase.auth.getUser()).data.user;
-      await supabase.from('stock_movements').insert({
+      // A trigger applies this movement to products.current_stock. It can be
+      // rejected — taking stock below zero violates the non-negative constraint
+      // — so the error has to be surfaced rather than swallowed.
+      const { error } = await supabase.from('stock_movements').insert({
         product_id: form.product_id,
         type: form.type,
-        quantity: Number(form.quantity),
+        quantity,
         reference: form.reference || null,
         notes: form.notes || null,
         created_by: user?.id,
       });
+      if (error) { reportError('Stock movement could not be recorded', error); return; }
+      const product = products.find(p => p.id === form.product_id);
+      toast.success('Stock movement recorded', `${form.type.toUpperCase()} ${quantity} — ${product?.name ?? 'product'}`);
       setModalOpen(false);
       setForm({ product_id: '', type: 'in', quantity: '', reference: '', notes: '' });
       loadData();
@@ -163,7 +183,7 @@ export default function Inventory() {
                       </div>
                     </td>
                     <td className="py-3 px-4"><StatusBadge status={m.type.toUpperCase()} variant={typeVariants[m.type]} /></td>
-                    <td className="py-3 px-4 text-right text-black font-medium">{m.type === 'adjustment' ? `→ ${m.quantity}` : m.type === 'in' ? `+${m.quantity}` : `-${m.quantity}`}</td>
+                    <td className="py-3 px-4 text-right text-black font-medium">{m.type === 'adjustment' ? `→ ${m.quantity}` : m.type === 'out' ? `-${m.quantity}` : `+${m.quantity}`}</td>
                     <td className="py-3 px-4 text-navy-300">{m.reference || '-'}</td>
                     <td className="py-3 px-4 text-navy-300 max-w-xs truncate">{m.notes || '-'}</td>
                     <td className="py-3 px-4 text-navy-300">{new Date(m.created_at).toLocaleDateString('en-ZA')}</td>

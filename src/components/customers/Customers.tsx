@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { reportError } from '../../lib/errors';
+import { fetchAllRows } from '../../lib/fetchAll';
 import { Customer } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
+import { useToast } from '../ui/Toast';
 import CustomerHistoryPanel from './CustomerHistoryPanel';
 import { Plus, Search, Edit2, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Receipt } from 'lucide-react';
 
@@ -12,6 +15,7 @@ interface CustomerStats {
 }
 
 export default function Customers() {
+  const toast = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<Record<string, CustomerStats>>({});
   const [search, setSearch] = useState('');
@@ -31,16 +35,29 @@ export default function Customers() {
 
   async function loadData() {
     setLoading(true);
-    const [custRes, salesRes] = await Promise.all([
+    const [custRes, customerSales] = await Promise.all([
       supabase.from('customers').select('*').eq('is_active', true).order('name'),
       // Order counts / spend per customer, so a card shows at a glance whether
       // there is any purchase history behind it.
-      supabase.from('sales').select('customer_id, total').eq('status', 'completed').not('customer_id', 'is', null),
+      //
+      // Paged: this aggregates over the whole sales table, and a single Supabase
+      // response stops at 1000 rows without reporting that it did — so lifetime
+      // spend would have silently started reading low, worst of all for the
+      // longest-standing customers.
+      fetchAllRows<{ customer_id: string; total: number }>((from, to) =>
+        supabase
+          .from('sales')
+          .select('customer_id, total')
+          .eq('status', 'completed')
+          .not('customer_id', 'is', null)
+          .order('created_at', { ascending: true })
+          .range(from, to)
+      ).catch(err => { reportError('Customer purchase totals could not be read', err); return []; }),
     ]);
     setCustomers(custRes.data || []);
     const totals: Record<string, CustomerStats> = {};
-    for (const sale of salesRes.data || []) {
-      const id = sale.customer_id as string;
+    for (const sale of customerSales) {
+      const id = sale.customer_id;
       const entry = totals[id] || (totals[id] = { orders: 0, spent: 0 });
       entry.orders += 1;
       entry.spent += Number(sale.total) || 0;
@@ -82,11 +99,11 @@ export default function Customers() {
         notes: form.notes || null,
         is_active: form.is_active,
       };
-      if (editCustomer) {
-        await supabase.from('customers').update(data).eq('id', editCustomer.id);
-      } else {
-        await supabase.from('customers').insert(data);
-      }
+      const { error } = editCustomer
+        ? await supabase.from('customers').update(data).eq('id', editCustomer.id)
+        : await supabase.from('customers').insert(data);
+      if (error) { reportError('Customer could not be saved', error); return; }
+      toast.success(editCustomer ? 'Customer updated' : 'Customer created', form.name);
       setModalOpen(false);
       loadData();
     } finally {
@@ -95,7 +112,9 @@ export default function Customers() {
   }
 
   async function handleDelete(c: Customer) {
-    await supabase.from('customers').update({ is_active: false }).eq('id', c.id);
+    const { error } = await supabase.from('customers').update({ is_active: false }).eq('id', c.id);
+    if (error) { reportError('Customer could not be deleted', error); return; }
+    toast.success('Customer deleted', c.name);
     setDeleteModal(null);
     loadData();
   }

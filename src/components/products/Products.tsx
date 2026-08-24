@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Product, Category, Supplier } from '../../types';
+import { formatError, reportError } from '../../lib/errors';
+import { fetchAllRows } from '../../lib/fetchAll';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
+import { useToast } from '../ui/Toast';
 import {
   Plus, Search, Edit2, Trash2, Package,
   Barcode, AlertTriangle, ShoppingCart,
 } from 'lucide-react';
 
 export default function Products() {
+  const toast = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -37,16 +41,26 @@ export default function Products() {
 
   async function loadData() {
     setLoading(true);
-    const [prodRes, catRes, supRes, moveRes] = await Promise.all([
+    const [prodRes, catRes, supRes, outMovements] = await Promise.all([
       supabase.from('products').select('*, category:categories(*), supplier:suppliers(*)').eq('is_active', true).order('name'),
       supabase.from('categories').select('*').order('name'),
       supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
-      supabase.from('stock_movements').select('product_id, quantity').eq('type', 'out'),
+      // Paged: Supabase truncates a single response at 1000 rows without saying
+      // so, which would have made every product's derived Total Stock read low
+      // once the shop passed its thousandth stock-out.
+      fetchAllRows<{ product_id: string; quantity: number }>((from, to) =>
+        supabase
+          .from('stock_movements')
+          .select('product_id, quantity')
+          .eq('type', 'out')
+          .order('created_at', { ascending: true })
+          .range(from, to)
+      ).catch(err => { reportError('Stock history could not be read', err); return []; }),
     ]);
 
     // Derive each product's original Total Stock = remaining current_stock + everything sold.
     const soldByProduct = new Map<string, number>();
-    (moveRes.data || []).forEach((m: { product_id: string; quantity: number }) => {
+    outMovements.forEach(m => {
       soldByProduct.set(m.product_id, (soldByProduct.get(m.product_id) || 0) + m.quantity);
     });
     const products = (prodRes.data || []).map((p: Product) => ({
@@ -112,17 +126,30 @@ export default function Products() {
         is_active: form.is_active,
       };
 
+      let error;
       if (editProduct) {
         // Total Stock is derived (current + sold). Keep the already-sold quantity
         // intact: new current_stock = new total minus what was already sold.
         const sold = (editProduct.total_stock ?? editProduct.current_stock) - editProduct.current_stock;
-        await supabase.from('products')
+        // Setting a total below what has already gone out the door has no valid
+        // meaning — it would imply negative stock on hand. Say so rather than
+        // quietly clamping to zero and losing the operator's real intent.
+        if (totalStock < sold) {
+          toast.error(
+            'Total Stock is too low',
+            `${sold} ${editProduct.unit} have already been sold. To correct a miscount, record an Adjustment on the Inventory screen.`
+          );
+          return;
+        }
+        ({ error } = await supabase.from('products')
           .update({ ...data, current_stock: totalStock - sold })
-          .eq('id', editProduct.id);
+          .eq('id', editProduct.id));
       } else {
         // New product: nothing sold yet, so current stock starts at the total.
-        await supabase.from('products').insert({ ...data, current_stock: totalStock });
+        ({ error } = await supabase.from('products').insert({ ...data, current_stock: totalStock }));
       }
+      if (error) { reportError('Product could not be saved', error); return; }
+      toast.success(editProduct ? 'Product updated' : 'Product created', form.name);
       setModalOpen(false);
       loadData();
     } finally {
@@ -131,7 +158,9 @@ export default function Products() {
   }
 
   async function handleDelete(product: Product) {
-    await supabase.from('products').update({ is_active: false }).eq('id', product.id);
+    const { error } = await supabase.from('products').update({ is_active: false }).eq('id', product.id);
+    if (error) { reportError('Product could not be deleted', error); return; }
+    toast.success('Product deleted', product.name);
     setDeleteModal(null);
     loadData();
   }
@@ -166,11 +195,16 @@ export default function Products() {
         created_by: user?.id,
       });
       if (error) throw error;
+      toast.success('Stock recorded', `${qty} ${saleProduct.unit} out — ${saleProduct.name}`);
       setSaleProduct(null);
       loadData();
     } catch (err) {
       console.error('Sale stock error:', err);
-      setSaleError('Failed to record sale. Please try again.');
+      // Show the actual reason. A flat "please try again" hid the one failure
+      // that is worth reading — the non-negative stock constraint, which means
+      // someone else has already sold what this snapshot thinks is on hand, and
+      // retrying will not help.
+      setSaleError(formatError(err));
     } finally {
       setSelling(false);
     }

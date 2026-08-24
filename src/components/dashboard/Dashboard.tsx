@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { fetchAllRows } from '../../lib/fetchAll';
+import { reportError } from '../../lib/errors';
 import { Product, Sale, SaleItem, StockMovement } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
@@ -38,6 +40,27 @@ interface DashboardStats {
   salesChange: number;
 }
 
+/**
+ * Month-on-month delta for a stat card. The arrow and colour follow the sign —
+ * the original markup hardcoded a green up-arrow and a leading "+", so a decline
+ * would have been rendered as growth.
+ */
+function ChangeIndicator({ change }: { change: number }) {
+  const rounded = Math.round(change * 10) / 10;
+  const Icon = rounded < 0 ? ArrowDownRight : ArrowUpRight;
+  const tone = rounded < 0 ? 'text-red-600' : rounded > 0 ? 'text-green-600' : 'text-navy-400';
+
+  return (
+    <div className="flex items-center gap-1 mt-3 text-xs">
+      {rounded !== 0 && <Icon className={`w-3 h-3 ${tone}`} />}
+      <span className={`${tone} font-medium`}>
+        {rounded > 0 ? '+' : ''}{rounded}%
+      </span>
+      <span className="text-navy-400 ml-1">vs last month</span>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0, totalProducts: 0, lowStockCount: 0, totalSales: 0,
@@ -59,57 +82,99 @@ export default function Dashboard() {
   async function loadDashboardData() {
     setLoading(true);
     try {
-      const [productsRes, salesRes, movementsRes] = await Promise.all([
-        supabase.from('products').select('*').eq('is_active', true),
-        supabase.from('sales').select('*').order('created_at', { ascending: false }).limit(50),
+      const [productsRes, allSales, recentRes, movementsRes] = await Promise.all([
+        supabase.from('products').select('*, category:categories(name)').eq('is_active', true),
+        // "Total Revenue" and "Total Sales" claim to be all-time, so they have to
+        // read all-time. This used to aggregate the 50 most recent sales, which
+        // meant both figures quietly stopped growing at the 50th invoice. Only
+        // the three columns the aggregates need are selected, so paging through
+        // the whole table stays cheap.
+        fetchAllRows<Pick<Sale, 'total' | 'created_at' | 'status'>>((from, to) =>
+          supabase
+            .from('sales')
+            .select('total, created_at, status')
+            .order('created_at', { ascending: false })
+            .range(from, to)
+        ),
+        supabase.from('sales').select('*, customer:customers(*)').order('created_at', { ascending: false }).limit(5),
         supabase.from('stock_movements').select('*, product:products(name, sku)').order('created_at', { ascending: false }).limit(10),
       ]);
 
       const products = (productsRes.data || []) as Product[];
-      const sales = (salesRes.data || []) as Sale[];
       const movements = (movementsRes.data || []) as StockMovement[];
+      const completed = allSales.filter(s => s.status === 'completed');
 
-      const totalRevenue = sales.filter(s => s.status === 'completed').reduce((sum, s) => sum + Number(s.total), 0);
+      const totalRevenue = completed.reduce((sum, s) => sum + Number(s.total), 0);
       const lowStock = products.filter(p => p.current_stock <= p.min_stock_level);
-      const recent = sales.slice(0, 5);
 
-      // Revenue chart data (last 7 days)
+      // Bucket by the LOCAL calendar day. `created_at` is UTC, and the previous
+      // code compared it against a key built with toISOString() — so in SAST
+      // (UTC+2) every sale before 02:00 was filed under the previous day.
+      const dayKey = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      const revenueByDay = new Map<string, number>();
+      completed.forEach(s => {
+        const key = dayKey(new Date(s.created_at));
+        revenueByDay.set(key, (revenueByDay.get(key) || 0) + Number(s.total));
+      });
+
       const last7Days = Array.from({ length: 7 }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() - (6 - i));
-        const key = d.toISOString().split('T')[0];
-        const label = d.toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' });
-        const dayRevenue = sales
-          .filter(s => s.created_at.startsWith(key) && s.status === 'completed')
-          .reduce((sum, s) => sum + Number(s.total), 0);
-        return { date: label, revenue: dayRevenue };
+        return {
+          date: d.toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' }),
+          revenue: revenueByDay.get(dayKey(d)) || 0,
+        };
       });
 
-      // Category distribution
+      // Real month-on-month movement, replacing the hardcoded +12.5% / +8.3%
+      // that were rendered as though they were measured. Both compare the
+      // calendar month to date against the whole of the previous month.
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+      const inRange = (s: { created_at: string }, start: Date, end: Date) => {
+        const at = new Date(s.created_at);
+        return at >= start && at < end;
+      };
+      const thisMonth = completed.filter(s => inRange(s, monthStart, now));
+      const prevMonth = completed.filter(s => inRange(s, prevMonthStart, monthStart));
+
+      const sumTotal = (rows: typeof completed) => rows.reduce((sum, s) => sum + Number(s.total), 0);
+      // With no previous month to compare against there is no percentage to
+      // report — 0 reads as "flat", which is the honest answer.
+      const percentChange = (current: number, previous: number) =>
+        previous === 0 ? 0 : ((current - previous) / previous) * 100;
+
+      // Category distribution by product count, using the real category names.
+      // The pie was previously hardcoded to a fixed 35/25/20/20 split, and the
+      // map computed for it was discarded.
       const catMap = new Map<string, number>();
       products.forEach(p => {
-        const cat = p.category_id || 'Uncategorized';
+        const cat = p.category?.name || 'Uncategorised';
         catMap.set(cat, (catMap.get(cat) || 0) + 1);
       });
+      const categories = [...catMap.entries()]
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
 
       setStats({
         totalRevenue,
         totalProducts: products.length,
         lowStockCount: lowStock.length,
-        totalSales: sales.filter(s => s.status === 'completed').length,
-        revenueChange: sales.length > 1 ? 12.5 : 0,
-        salesChange: sales.length > 1 ? 8.3 : 0,
+        totalSales: completed.length,
+        revenueChange: percentChange(sumTotal(thisMonth), sumTotal(prevMonth)),
+        salesChange: percentChange(thisMonth.length, prevMonth.length),
       });
       setRevenueData(last7Days);
-      setCategoryData([
-        { name: 'Guns', value: 35 },
-        { name: 'Air Rifles & Accessories', value: 25 },
-        { name: 'Pocket Knives & Butterfly Knives', value: 20 },
-        { name: 'Other', value: 20 },
-      ]);
-      setRecentSales(recent);
+      setCategoryData(categories);
+      setRecentSales((recentRes.data || []) as Sale[]);
       setLowStockProducts(lowStock.slice(0, 5));
       setRecentMovements(movements);
+    } catch (err) {
+      reportError('Dashboard could not be loaded', err);
     } finally {
       setLoading(false);
     }
@@ -152,11 +217,7 @@ export default function Dashboard() {
               <DollarSign className="w-5 h-5 text-green-600" />
             </div>
           </div>
-          <div className="flex items-center gap-1 mt-3 text-xs">
-            <ArrowUpRight className="w-3 h-3 text-green-600" />
-            <span className="text-green-600 font-medium">+{stats.revenueChange}%</span>
-            <span className="text-navy-400 ml-1">vs last month</span>
-          </div>
+          <ChangeIndicator change={stats.revenueChange} />
         </GlassCard>
 
         <GlassCard>
@@ -200,11 +261,7 @@ export default function Dashboard() {
               <ShoppingCart className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <div className="flex items-center gap-1 mt-3 text-xs">
-            <ArrowUpRight className="w-3 h-3 text-green-600" />
-            <span className="text-green-600 font-medium">+{stats.salesChange}%</span>
-            <span className="text-navy-400 ml-1">vs last month</span>
-          </div>
+          <ChangeIndicator change={stats.salesChange} />
         </GlassCard>
       </div>
 

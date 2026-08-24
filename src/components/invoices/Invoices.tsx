@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { fetchAllRows } from '../../lib/fetchAll';
+import { reportError } from '../../lib/errors';
+import { usePersistentState } from '../../hooks/usePersistentState';
 import { Sale, SaleItem, Customer } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import StatusBadge from '../ui/StatusBadge';
 import Modal from '../ui/Modal';
+import { useToast } from '../ui/Toast';
 import InvoicePreviewModal from './InvoicePreviewModal';
 import { Search, FileText, Printer, Plus } from 'lucide-react';
 
@@ -23,6 +27,7 @@ interface ManualInvoice {
 const STORAGE_KEY = 'manual_invoices';
 
 export default function Invoices() {
+  const toast = useToast();
   const [sales, setSales] = useState<Sale[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,19 +39,15 @@ export default function Invoices() {
     customer_name: '', date: '', product_name: '',
     quantity: '1', tax: '0', discount: '0', price: '', payment: 'cash',
   });
-  const [manualInvoices, setManualInvoices] = useState<ManualInvoice[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    } catch {
-      return [];
-    }
-  });
+  // Via usePersistentState rather than a hand-rolled read + write-on-change
+  // pair. That pair wrote back on the very first render, so a read that threw
+  // (corrupt JSON, private-mode storage) fell back to [] and then immediately
+  // persisted that [] — destroying every manual invoice on the machine. The
+  // hook skips the first write for exactly this reason, and its write is
+  // wrapped against quota/availability errors.
+  const [manualInvoices, setManualInvoices] = usePersistentState<ManualInvoice[]>(STORAGE_KEY, []);
 
   useEffect(() => { loadSales(); }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(manualInvoices));
-  }, [manualInvoices]);
 
   function openCreate() {
     setForm({
@@ -56,13 +57,32 @@ export default function Invoices() {
     setCreateOpen(true);
   }
 
+  // Next MAN- sequence = one past the highest ever issued, read back off the
+  // existing numbers. Counting the list (length + 1) reused a number as soon as
+  // one was deleted, so two different invoices could go out identically
+  // numbered — the one thing an invoice number may never do.
+  function nextManualNumber(): string {
+    const highest = manualInvoices.reduce((max, m) => {
+      const seq = parseInt(String(m.invoice_number).replace(/^MAN-/, ''), 10);
+      return Number.isNaN(seq) ? max : Math.max(max, seq);
+    }, 0);
+    return `MAN-${String(highest + 1).padStart(4, '0')}`;
+  }
+
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.customer_name || !form.product_name || !form.price) return;
-    const seq = manualInvoices.length + 1;
+
+    // A discount larger than the line itself would produce a negative invoice.
+    const gross = Number(form.price) * Number(form.quantity);
+    if (Number(form.discount) > gross) {
+      toast.error('Discount is too large', `It cannot be more than the ${fmt(gross)} line total.`);
+      return;
+    }
+
     const invoice: ManualInvoice = {
       id: `${Date.now()}`,
-      invoice_number: `MAN-${String(seq).padStart(4, '0')}`,
+      invoice_number: nextManualNumber(),
       customer_name: form.customer_name,
       date: form.date,
       product_name: form.product_name,
@@ -73,6 +93,7 @@ export default function Invoices() {
       payment: form.payment as ManualInvoice['payment'],
     };
     setManualInvoices([invoice, ...manualInvoices]);
+    toast.success('Invoice created', `${invoice.invoice_number} — ${invoice.customer_name}`);
     setCreateOpen(false);
   }
 
@@ -82,8 +103,16 @@ export default function Invoices() {
 
   // Adapt a manual invoice to the Sale/SaleItem shape so it can reuse the
   // existing invoice generator for view / download / print.
+  //
+  // The adaptation has to match the POS's convention, because both feed the same
+  // receipt template: there, a discount is given by editing the unit price down,
+  // so `subtotal` is already net of it and `discount_total` is a record of how
+  // much was given, not a term still to be subtracted. A manual invoice captures
+  // price and discount separately, so fold the discount into the unit price the
+  // same way. Without this the one template printed two different arithmetics.
   function buildManualSale(m: ManualInvoice): { sale: Sale; items: SaleItem[] } {
-    const subtotal = m.price * m.quantity;
+    const subtotal = m.price * m.quantity - m.discount;
+    const effectiveUnitPrice = m.quantity > 0 ? subtotal / m.quantity : subtotal;
     const sale = {
       id: m.id,
       invoice_number: m.invoice_number,
@@ -103,7 +132,7 @@ export default function Invoices() {
       product_id: '',
       product_name: m.product_name,
       quantity: m.quantity,
-      unit_price: m.price,
+      unit_price: effectiveUnitPrice,
       vat_rate: 0,
       discount: m.discount,
       line_total: subtotal,
@@ -120,9 +149,24 @@ export default function Invoices() {
 
   async function loadSales() {
     setLoading(true);
-    const { data } = await supabase.from('sales').select('*, customer:customers(*)').order('created_at', { ascending: false });
-    setSales(data || []);
-    setLoading(false);
+    try {
+      // Paged. This list is the only way to find an old invoice — the search box
+      // filters it client-side — and an unpaged query stops at Supabase's 1000
+      // row cap without saying so, which would quietly make every invoice past
+      // the thousandth unfindable.
+      const rows = await fetchAllRows<Sale>((from, to) =>
+        supabase
+          .from('sales')
+          .select('*, customer:customers(*)')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      );
+      setSales(rows);
+    } catch (err) {
+      reportError('Invoices could not be loaded', err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadSaleItems(sale: Sale) {

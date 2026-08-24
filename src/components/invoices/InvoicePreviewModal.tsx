@@ -9,6 +9,7 @@ import {
   receiptFrameWidthPx,
 } from '../../lib/invoices';
 import { downloadInvoicePdf } from '../../lib/invoicePdf';
+import { notifyError } from '../../lib/errors';
 
 /** Height used until the receipt has been measured. */
 const INITIAL_PREVIEW_HEIGHT_PX = 640;
@@ -122,9 +123,9 @@ export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePre
       await downloadInvoicePdf(sale, items);
     } catch (err) {
       console.error(`Could not export invoice ${sale.invoice_number}`, err);
-      alert(
-        `Could not save invoice ${sale.invoice_number} as a PDF:\n` +
-          (err instanceof Error ? err.message : 'Unknown error'),
+      notifyError(
+        `Could not save invoice ${sale.invoice_number} as a PDF`,
+        err instanceof Error ? err.message : 'Unknown error',
       );
     } finally {
       setSaving(false);

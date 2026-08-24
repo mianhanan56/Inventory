@@ -79,6 +79,13 @@ export default function CustomerHistoryPanel({ customer, onClose }: Props) {
     return [...map.values()].sort((a, b) => b.times - a.times).slice(0, 12);
   }, [sales]);
 
+  // `sales` is capped at the 20 most recent purchases (that is all this panel
+  // needs for re-ordering), so this is the spend across those, not lifetime
+  // spend. The header says so — it used to read "N purchases · R x spent",
+  // which stopped being true at the customer's 21st order and understated a
+  // long-standing customer's value. Lifetime figures are on the Customers card.
+  const RECENT_LIMIT = 20;
+  const cappedAtLimit = sales.length === RECENT_LIMIT;
   const totalSpent = sales.reduce((sum, s) => sum + Number(s.total), 0);
   const selectedLines = Object.values(selected);
 
@@ -123,7 +130,11 @@ export default function CustomerHistoryPanel({ customer, onClose }: Props) {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-black truncate">{customer.name}</h2>
             <p className="text-navy-400 text-sm mt-0.5">
-              {loading ? 'Loading purchases…' : `${sales.length} purchase${sales.length === 1 ? '' : 's'} · ${fmt(totalSpent)} spent`}
+              {loading
+                ? 'Loading purchases…'
+                : cappedAtLimit
+                  ? `Last ${RECENT_LIMIT} purchases · ${fmt(totalSpent)}`
+                  : `${sales.length} purchase${sales.length === 1 ? '' : 's'} · ${fmt(totalSpent)} spent`}
             </p>
           </div>
           <button onClick={onClose} className="text-navy-400 hover:text-black transition p-1 shrink-0">

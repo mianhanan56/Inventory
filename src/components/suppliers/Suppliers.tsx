@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { reportError } from '../../lib/errors';
 import { Supplier } from '../../types';
 import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
+import { useToast } from '../ui/Toast';
 import { Plus, Search, Edit2, Trash2, Truck, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react';
 
 export default function Suppliers() {
+  const toast = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -61,11 +64,11 @@ export default function Suppliers() {
         notes: form.notes || null,
         is_active: form.is_active,
       };
-      if (editSupplier) {
-        await supabase.from('suppliers').update(data).eq('id', editSupplier.id);
-      } else {
-        await supabase.from('suppliers').insert(data);
-      }
+      const { error } = editSupplier
+        ? await supabase.from('suppliers').update(data).eq('id', editSupplier.id)
+        : await supabase.from('suppliers').insert(data);
+      if (error) { reportError('Supplier could not be saved', error); return; }
+      toast.success(editSupplier ? 'Supplier updated' : 'Supplier created', form.name);
       setModalOpen(false);
       loadData();
     } finally {
@@ -74,7 +77,9 @@ export default function Suppliers() {
   }
 
   async function handleDelete(s: Supplier) {
-    await supabase.from('suppliers').update({ is_active: false }).eq('id', s.id);
+    const { error } = await supabase.from('suppliers').update({ is_active: false }).eq('id', s.id);
+    if (error) { reportError('Supplier could not be deleted', error); return; }
+    toast.success('Supplier deleted', s.name);
     setDeleteModal(null);
     loadData();
   }

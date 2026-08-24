@@ -7,12 +7,15 @@ import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
 import InvoicePreviewModal from '../invoices/InvoicePreviewModal';
+import { useToast } from '../ui/Toast';
+import { reportError } from '../../lib/errors';
 import {
   Search, ShoppingCart, Plus, Minus, CreditCard,
   Banknote, Receipt, Eye, X, Package, Printer, Check, Trash2, RotateCcw,
 } from 'lucide-react';
 
 export default function Sales() {
+  const toast = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -58,10 +61,21 @@ export default function Sales() {
     // stay a functional update: StrictMode runs the mount effect twice, and a
     // value captured from the render closure would be stale on the second pass
     // and wipe a cart the first pass had just filled.
-    setCart(prev => prev.map(item => {
-      const fresh = freshProducts.find(p => p.id === item.product.id);
-      return fresh ? { ...item, product: fresh } : item;
-    }));
+    // A line whose product is no longer sellable (deactivated, or sold down to
+    // zero — the query filters both out) is dropped rather than left holding a
+    // stale snapshot that would let it be sold anyway. Surviving lines are
+    // clamped to the stock that actually remains.
+    //
+    // Only when the products query actually succeeded, though: on a failed load
+    // `data` is null, and treating that empty list as the truth would delete a
+    // cart the user is halfway through building.
+    if (!prodRes.error) {
+      setCart(prev => prev.flatMap(item => {
+        const fresh = freshProducts.find(p => p.id === item.product.id);
+        if (!fresh) return [];
+        return [{ ...item, product: fresh, quantity: Math.min(item.quantity, fresh.current_stock) }];
+      }));
+    }
     setLoading(false);
   }
 
@@ -131,6 +145,9 @@ export default function Sales() {
       removeFromCart(product.id);
       return;
     }
+    // The product list is already filtered to in-stock items, but the snapshot
+    // can be stale by the time it is clicked. Never open a line we cannot fill.
+    if (product.current_stock < 1) return;
     setCart([...cart, { product, quantity: 1, unit_price: product.selling_price }]);
   }
 
@@ -147,10 +164,17 @@ export default function Sales() {
     ));
   }
 
+  // A line can never exceed the stock on the product snapshot it holds. This is
+  // the same rule resolveStagedOrder() applies to a re-order from the Customers
+  // tab; the manually-built cart goes through here instead. It is a convenience
+  // guard only — the authoritative check is the products.current_stock >= 0
+  // constraint, which aborts the sale server-side if the snapshot was stale.
   function updateQuantity(productId: string, qty: number) {
     if (qty <= 0) { removeFromCart(productId); return; }
     setCart(cart.map(item =>
-      item.product.id === productId ? { ...item, quantity: qty } : item
+      item.product.id === productId
+        ? { ...item, quantity: Math.min(qty, item.product.current_stock) }
+        : item
     ));
   }
 
@@ -175,28 +199,67 @@ export default function Sales() {
   // existing number for the current month and incrementing it. This replaces the
   // DB generate_invoice_number() function, which parsed the sequence from the
   // wrong character offset and always returned 0001 (causing duplicate-key errors).
-  async function nextInvoiceNumber(): Promise<string> {
+  //
+  // `offset` is the retry count. Re-reading the maximum only produces a
+  // different number if the colliding row is visible to this read; if it is not
+  // (replica lag, or a number issued out of band), every retry would recompute
+  // the same value and all five attempts would fail on the same collision.
+  // Stepping the sequence by the attempt number makes the loop converge.
+  async function nextInvoiceNumber(offset = 0): Promise<string> {
     const now = new Date();
     const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
     const prefix = `INV-${datePart}-`;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('sales')
       .select('invoice_number')
       .like('invoice_number', `${prefix}%`)
       .order('invoice_number', { ascending: false })
       .limit(1);
+    // A failed read would silently restart the month at 0001 and collide with
+    // every existing invoice, burning all five attempts.
+    if (error) throw error;
+
     let seq = 1;
     if (data && data.length > 0) {
       const lastSeq = parseInt(String(data[0].invoice_number).slice(prefix.length), 10);
       if (!Number.isNaN(lastSeq)) seq = lastSeq + 1;
     }
-    return `${prefix}${String(seq).padStart(4, '0')}`;
+    return `${prefix}${String(seq + offset).padStart(4, '0')}`;
   }
 
   async function completeSale() {
     if (cart.length === 0) return;
     setSaving(true);
     try {
+      // Re-read stock immediately before writing anything. The cart's product
+      // snapshot is as old as the last loadData(), so another till may have sold
+      // the same items since. Catching it here means we refuse the sale before
+      // the sales row exists, instead of leaving an invoice behind when the
+      // non-negative-stock constraint rejects the movement insert later.
+      const { data: liveStock, error: liveStockError } = await supabase
+        .from('products')
+        .select('id, name, current_stock')
+        .in('id', cart.map(item => item.product.id));
+      if (liveStockError) throw liveStockError;
+
+      const short = cart
+        .map(item => {
+          const live = (liveStock || []).find(p => p.id === item.product.id);
+          const available = live?.current_stock ?? 0;
+          return available < item.quantity
+            ? `${item.product.name}: ${item.quantity} requested, ${available} in stock`
+            : null;
+        })
+        .filter(Boolean);
+
+      if (short.length > 0) {
+        toast.error('Stock has changed since this cart was built', `${short.join('\n')}\n\nThe cart has been updated — check the quantities and try again.`);
+        // Refresh so the cart's snapshot — and the +/- limits it drives — match
+        // what is actually on the shelf.
+        await loadData();
+        return;
+      }
+
       const user = (await supabase.auth.getUser()).data.user;
 
       // Insert the sale, generating the invoice number on the client. We retry on
@@ -205,7 +268,7 @@ export default function Sales() {
       let saleResult: { id: string } | null = null;
       let invoiceNumber = '';
       for (let attempt = 0; attempt < 5; attempt++) {
-        invoiceNumber = await nextInvoiceNumber();
+        invoiceNumber = await nextInvoiceNumber(attempt);
         const saleData = {
           invoice_number: invoiceNumber,
           customer_id: selectedCustomer || null,
@@ -251,38 +314,28 @@ export default function Sales() {
         notes: `Sale: ${invoiceNumber}`,
         created_by: user?.id,
       }));
+      // This insert is what deducts stock: the trg_update_product_stock trigger
+      // applies a relative `current_stock - quantity` per movement, atomically
+      // and server-side. The client deliberately does NOT also write products
+      // .current_stock — it used to write an absolute (loaded stock - qty sold)
+      // target, which double-counts as a lost update when two tills are open:
+      // the second till's snapshot predates the first till's sale and writes
+      // that older figure back, erasing the first deduction. A relative
+      // decrement in the trigger has no such race, and the
+      // products_current_stock_non_negative constraint turns an oversell into a
+      // failed insert here rather than negative stock or a silent clamp to zero.
       const { error: movementsError } = await supabase.from('stock_movements').insert(stockMovements);
       if (movementsError) throw movementsError;
 
-      // Deduct sold quantity from each product's stock. We set an absolute
-      // target value (loaded stock - qty sold) rather than a relative decrement,
-      // so the result is correct and idempotent whether or not a DB trigger also
-      // adjusts stock on the movement insert (no risk of double-deduction).
-      const stockUpdates = await Promise.all(
-        cart.map(item =>
-          supabase
-            .from('products')
-            .update({ current_stock: Math.max(0, item.product.current_stock - item.quantity) })
-            .eq('id', item.product.id)
-        )
-      );
-      const stockUpdateError = stockUpdates.find(res => res.error)?.error;
-      if (stockUpdateError) throw stockUpdateError;
+      toast.success(`Sale ${invoiceNumber} completed`, `${cart.length} line${cart.length === 1 ? '' : 's'} · ${fmt(total)}`);
 
       // Reset
       clearCart();
       loadData();
     } catch (err) {
-      console.error('Sale error:', err);
-      const e = err as { message?: string; code?: string; details?: string; hint?: string } | null;
-      const parts = [
-        e?.message,
-        e?.code ? `code: ${e.code}` : null,
-        e?.details ? `details: ${e.details}` : null,
-        e?.hint ? `hint: ${e.hint}` : null,
-      ].filter(Boolean);
-      const msg = parts.length ? parts.join('\n') : (err instanceof Error ? err.message : JSON.stringify(err));
-      alert(`Sale could not be completed:\n${msg || 'Unknown error'}`);
+      // Same formatting this used to build inline, now shared with every other
+      // screen — and shown as a toast rather than a blocking alert.
+      reportError('Sale could not be completed', err);
     } finally {
       setSaving(false);
     }
@@ -457,9 +510,17 @@ export default function Sales() {
                           <Minus className="w-3 h-3" />
                         </button>
                         <span className="text-black font-medium text-sm w-8 text-center">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="w-7 h-7 bg-navy-600 rounded-lg flex items-center justify-center text-black hover:bg-navy-500 transition">
+                        <button
+                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                          disabled={item.quantity >= item.product.current_stock}
+                          title={item.quantity >= item.product.current_stock ? `Only ${item.product.current_stock} in stock` : undefined}
+                          className="w-7 h-7 bg-navy-600 rounded-lg flex items-center justify-center text-black hover:bg-navy-500 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-navy-600"
+                        >
                           <Plus className="w-3 h-3" />
                         </button>
+                        {item.quantity >= item.product.current_stock && (
+                          <span className="text-navy-400 text-xs">max ({item.product.current_stock})</span>
+                        )}
                       </div>
                       <span className="text-gold-400 font-semibold text-sm">
                         {fmt(item.unit_price * item.quantity)}
@@ -536,14 +597,19 @@ export default function Sales() {
                     <div className="flex justify-between text-navy-300">
                       <span>VAT</span><span>{fmt(vatTotal)}</span>
                     </div>
-                    {totalItemDiscount > 0 && (
-                      <div className="flex justify-between text-red-600">
-                        <span>Discount</span><span>-{fmt(totalItemDiscount)}</span>
-                      </div>
-                    )}
                     <div className="flex justify-between text-black font-bold text-lg pt-2 border-t border-navy-700/50">
                       <span>Total</span><span>{fmt(total)}</span>
                     </div>
+                    {/* Below the total, not among the rows that make it up: the
+                        discount is already inside Subtotal (it is given by
+                        editing the unit price down), so listing it as another
+                        "-R x" term made the summary fail to add up. Matches the
+                        printed receipt. */}
+                    {totalItemDiscount > 0 && (
+                      <div className="flex justify-between text-green-600 text-xs pt-1">
+                        <span>You saved</span><span>{fmt(totalItemDiscount)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -648,8 +714,8 @@ export default function Sales() {
             <div className="border-t border-navy-700/50 pt-3 text-sm space-y-1">
               <div className="flex justify-between text-navy-300"><span>Subtotal</span><span>{fmt(Number(saleDetail.subtotal))}</span></div>
               <div className="flex justify-between text-navy-300"><span>VAT</span><span>{fmt(Number(saleDetail.vat_total))}</span></div>
-              {Number(saleDetail.discount_total) > 0 && <div className="flex justify-between text-red-600"><span>Discount</span><span>-{fmt(Number(saleDetail.discount_total))}</span></div>}
               <div className="flex justify-between text-black font-bold text-lg pt-2 border-t border-navy-700/50"><span>Total</span><span>{fmt(Number(saleDetail.total))}</span></div>
+              {Number(saleDetail.discount_total) > 0 && <div className="flex justify-between text-green-600 text-xs pt-1"><span>You saved</span><span>{fmt(Number(saleDetail.discount_total))}</span></div>}
             </div>
           </div>
         )}

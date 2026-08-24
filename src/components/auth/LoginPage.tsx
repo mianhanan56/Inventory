@@ -4,8 +4,12 @@ import { Package, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('aleemyaseen39@gmail.com');
-  const [password, setPassword] = useState('Aleem#12345');
+  // Never seed these. A real account's email and password were hardcoded here
+  // as the initial form values, so they shipped in the production bundle in
+  // plain text — readable by anyone who opened the app or viewed the JS, and
+  // pre-filled into a form with a show-password toggle next to it.
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
