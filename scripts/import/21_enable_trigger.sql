@@ -1,0 +1,1 @@
+ALTER TABLE stock_movements ENABLE TRIGGER trg_update_product_stock;

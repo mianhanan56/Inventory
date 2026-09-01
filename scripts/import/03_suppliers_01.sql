@@ -1,0 +1,3 @@
+INSERT INTO suppliers (id, name, contact_person, email, phone, address, city, province, postal_code, vat_number, notes, is_active, created_at, updated_at) VALUES
+('ef6e15f0-16f8-4f86-a53b-45180d0f7e50', 'Minnesota Child Care Center', 'Abdisamad Aty', 'minnesotachildcarecenter@gmail.com', '06129781757', '312 W Lake St Ste 2935', 'Minneapolis', NULL, '55408', NULL, NULL, true, '2026-06-18T18:43:34.250828+00:00', '2026-06-18T18:43:34.250828+00:00'),
+('df55d0be-8fe3-47eb-afe2-b96fbec2f4f9', 'Kids Garden Daycare', 'Mohamed Gelle', 'KidsGardenDaycare959@gmail.com', '06129786160', '959 Minnehaha Ave', 'Saint Paul', NULL, '55104', NULL, NULL, true, '2026-06-24T17:56:35.688931+00:00', '2026-06-24T17:56:35.688931+00:00');

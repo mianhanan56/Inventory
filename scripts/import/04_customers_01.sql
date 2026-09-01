@@ -1,0 +1,5 @@
+INSERT INTO customers (id, name, email, phone, address, city, province, postal_code, vat_number, notes, is_active, created_at, updated_at) VALUES
+('c181b3c1-154e-40b1-b978-52f4b6eff5dd', 'Mohamed Gelle', 'KidsGardenDaycare959@gmail.com', '06129786160', '959 Minnehaha Ave', 'Saint Paul', NULL, '55104', NULL, NULL, true, '2026-06-24T17:56:57.211727+00:00', '2026-06-24T17:56:57.211727+00:00'),
+('841115a3-4c7c-42e8-bbb1-8d97828fb24d', 'aleem', 'aleemyaseen39@gmail.com', '03107591278', 'Lahore', 'Lahore, Punjab, Pakistan', NULL, '38000', '555', '.......', true, '2026-06-18T18:42:57.097495+00:00', '2026-06-18T18:42:57.097495+00:00'),
+('39957cb1-2c6c-4cfd-8b44-eed292b43e0f', 'EKOL F92 Black', 'aleemyaseen39@gmail.com', '03107591278', 'Lahore', 'Lahore, Punjab, Pakistan', NULL, '38000', NULL, '1100', false, '2026-07-20T06:54:20.251569+00:00', '2026-07-20T06:54:20.251569+00:00'),
+('b9efeb33-6a00-42b7-96b7-deb464ee894e', 'NASEEM ', NULL, '0681842344', 'OVERPORT', NULL, NULL, NULL, NULL, NULL, true, '2026-08-02T08:49:06.71267+00:00', '2026-08-02T08:49:06.71267+00:00');
