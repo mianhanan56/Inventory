@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"ON TARGET UNITED" — a single-page inventory/POS app for a firearms retailer. React 18 + TypeScript + Vite + Tailwind, with Supabase (Postgres + Auth) as the entire backend. There is no server-side code of our own: the browser talks to Supabase directly with the anon key, and thermal-receipt printing happens client-side through the browser's own print dialog.
+"ON TARGET UNITED" — a single-page inventory/POS app for a firearms retailer. React 18 + TypeScript + Vite + Tailwind, with Supabase (Postgres + Auth) as the entire backend. There is no server-side code of our own: the browser talks to Supabase directly with the anon key. Thermal-receipt printing goes through **QZ Tray**, a small bridge app installed on the till, which is the only way a browser can hand raw bytes to a USB receipt printer.
 
 ## Commands
 
@@ -42,8 +42,11 @@ Stock cannot go negative: `products_current_stock_non_negative` is a `CHECK` con
 
 [src/lib/invoices.ts](src/lib/invoices.ts) is ~2000 lines and is mostly load-bearing prose explaining measurements taken on the client's Xprinter XP-Q200. **Read the block comments before changing any constant in it.** Key facts encoded there:
 
-- Printing goes through `window.print()` on a hidden iframe — no QZ Tray or bridge app, despite `qz-tray` still being a dependency (only the type shim in [qz-tray.d.ts](src/types/qz-tray.d.ts) remains).
-- Page *width* depends on item count: ≤15 items → 80mm page (1:1 on the paper), >15 → a wider page the driver shrinks to fit, trimming ~3mm off each edge. This is a deliberate, requested trade-off.
+- Printing has **two routes**, chosen in [printReceipt.ts](src/lib/printReceipt.ts) — never by preference, always thermal when it is available:
+  - **thermal** (normal): [qz.ts](src/lib/qz.ts) rasterises the receipt at the head's own 203dpi, sends the bitmap through QZ Tray, then sends `GS V B 0` to cut. There is no page and no print driver deciding anything, so the paper is exactly as long as the sale. This is what pharmacy/restaurant tills do.
+  - **browser** (fallback only, when QZ Tray is not running): `window.print()` on a hidden iframe, everything below. It asks the driver for a page; the driver decides what to feed. On a till whose driver is on a fixed sheet form every slip comes out that sheet's length — short sales padded, long sales shrunk. That is not fixable from here, and chasing it from here is what produced the item-count width rule below.
+  - Falling back is only allowed after a QZ failure that provably printed nothing (`not-running`, `no-printer`, `measure-failed`). Never after `print-failed` — a duplicate slip on a firearms sale is worse than a failed one.
+- Page *width* depends on item count: ≤15 items → 80mm page (1:1 on the paper), >15 → a wider page the driver shrinks to fit, trimming ~3mm off each edge. **This applies to the browser fallback only** — it is a bribe aimed at a print driver, and the thermal route has no driver to bribe, so `printReceipt.ts` always lays out at 80mm. Beware what the rule costs on paper: the driver's shrink is uniform, so a 16-item slip prints *shorter* than a 15-item one (156mm against 252mm, measured). Removing it is only safe once the till's driver is on the roll form.
 - Page *length* comes from a measured lookup table (`RECEIPT_PAGE_LENGTH_MM`, 1..30 items), raised to actual rendered content height, and written into an `@page` rule by an injected `pageSizingScript()` that re-measures on `beforeprint`.
 - The receipt is always one page, never scaled, never split.
 

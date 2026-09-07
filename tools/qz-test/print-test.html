@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Receipt print test</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        font: 14px/1.5 system-ui, sans-serif;
+        color: #111;
+        background: #fafafa;
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p.lede { margin: 0 0 20px; color: #555; max-width: 62ch; }
+      fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 14px 16px; margin: 0 0 16px; background: #fff; }
+      legend { font-weight: 600; padding: 0 6px; }
+      label { display: inline-flex; align-items: center; gap: 8px; margin-right: 16px; }
+      input[type='number'] { width: 6em; padding: 4px 6px; }
+      button { padding: 7px 14px; border: 1px solid #bbb; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
+      button.primary { background: #111; color: #fff; border-color: #111; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      pre { background: #111; color: #eee; padding: 12px 14px; border-radius: 8px; overflow: auto; max-height: 55vh; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Receipt print test</h1>
+    <p class="lede">
+      Prints a synthetic invoice through the real print path
+      (<code>printSaleReceipt</code>), so the thermal route can be exercised
+      without Supabase, a login, or real sale data. The log below says which
+      route the slip actually took and how much paper it used.
+    </p>
+
+    <fieldset>
+      <legend>Receipt</legend>
+      <label>Line items <input id="count" type="number" min="1" max="200" value="3" /></label>
+      <label><input id="longNames" type="checkbox" /> long product names (force wrapping)</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Actions</legend>
+      <button id="measure">Measure only (no printer)</button>
+      <button id="print" class="primary">Print</button>
+      <button id="sweep">Sweep 1 / 3 / 15 / 16 / 30 items</button>
+      <button id="clear">Clear log</button>
+    </fieldset>
+
+    <pre id="log">Ready.</pre>
+
+    <script type="module" src="./print-test.ts"></script>
+  </body>
+</html>

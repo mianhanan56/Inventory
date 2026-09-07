@@ -5,11 +5,13 @@ import { Sale, SaleItem } from '../../types';
 import {
   generateInvoiceHTML,
   getThermalPaperWidthMm,
-  printInvoiceWithAlert,
   receiptFrameWidthPx,
 } from '../../lib/invoices';
+import { PAPER_WIDTH_MM } from '../../lib/qz';
 import { downloadInvoicePdf } from '../../lib/invoicePdf';
 import { notifyError } from '../../lib/errors';
+import { useThermalPrinter } from '../../hooks/useThermalPrinter';
+import { useToast } from '../ui/Toast';
 
 /** Height used until the receipt has been measured. */
 const INITIAL_PREVIEW_HEIGHT_PX = 640;
@@ -78,9 +80,25 @@ interface InvoicePreviewModalProps {
  * already on paper - and on a till roll that is not a mistake you can undo.
  */
 export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePreviewModalProps) {
-  const [printing, setPrinting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const html = useMemo(() => generateInvoiceHTML(sale, items), [sale, items]);
+  const toast = useToast();
+  const thermal = useThermalPrinter();
+
+  /*
+   * Preview at the width the route about to be used prints at.
+   *
+   * The thermal route is always 80mm - it writes to the head's own dots, so
+   * there is no driver to shrink a wider page back down. The browser route
+   * still follows the item-count rule in invoices.ts. Showing one width and
+   * printing the other is how a preview stops being a preview.
+   */
+  const printing = thermal.printing;
+  const widthMm =
+    thermal.status === 'ready' ? PAPER_WIDTH_MM : getThermalPaperWidthMm(items.length);
+  const html = useMemo(
+    () => generateInvoiceHTML(sale, items, widthMm),
+    [sale, items, widthMm],
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -111,10 +129,33 @@ export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePre
   const unitCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
   async function handlePrint() {
-    setPrinting(true);
-    const printed = await printInvoiceWithAlert(sale, items);
-    setPrinting(false);
-    if (printed) onClose();
+    const outcome = await thermal.print(sale, items);
+
+    if (!outcome) {
+      notifyError(
+        `Could not print invoice ${sale.invoice_number}`,
+        thermal.error ?? 'Printing failed for an unknown reason.',
+      );
+      return;
+    }
+
+    if (outcome.route === 'thermal') {
+      toast.success(
+        `Invoice ${sale.invoice_number} printed`,
+        `${outcome.printer} · ${Math.round(outcome.heightMm ?? 0)}mm of paper`,
+      );
+    } else {
+      /* Printed, but through the dialog - and on the driver's idea of a page
+         rather than ours, which is the whole reason QZ Tray is there. Say so:
+         a slip with a blank tail is otherwise blamed on the app. */
+      toast.info(
+        `Invoice ${sale.invoice_number} printed through the browser`,
+        'QZ Tray is not running on this machine, so the paper length is the ' +
+          "printer driver's rather than the receipt's.",
+      );
+    }
+
+    onClose();
   }
 
   async function handleDownload() {
@@ -165,8 +206,57 @@ export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePre
           <span className="text-black font-semibold">Total {fmt(Number(sale.total))}</span>
         </div>
 
+        {/*
+          Which route this slip is about to take.
+
+          Not decoration: the two routes produce visibly different paper, and
+          the difference has been blamed on the receipt layout for two months.
+          A cashier who can see "QZ Tray not running" before pressing Print
+          knows why the slip that comes out has a blank tail.
+        */}
+        <div className="flex items-center justify-between gap-3 px-6 py-2 border-b border-navy-600/30 text-xs">
+          {thermal.status === 'ready' ? (
+            <>
+              <span className="text-navy-300">
+                Printing to <span className="text-black font-medium">{thermal.printer}</span> ·
+                cut to length
+              </span>
+              {thermal.printers.length > 1 && (
+                <select
+                  value={thermal.preferredPrinter ?? ''}
+                  onChange={(e) => void thermal.selectPrinter(e.target.value || null)}
+                  className="bg-navy-700 border border-navy-600/50 rounded-md px-2 py-1 text-black"
+                  title="Printer QZ Tray should send receipts to"
+                >
+                  <option value="">Detect automatically</option>
+                  {thermal.printers.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          ) : thermal.status === 'connecting' ? (
+            <span className="text-navy-400">Looking for the thermal printer…</span>
+          ) : (
+            <>
+              <span className="text-navy-400">
+                QZ Tray is not running — this slip will print through the browser dialog, at
+                whatever length the printer driver decides.
+              </span>
+              <button
+                onClick={() => void thermal.refresh()}
+                className="shrink-0 px-2 py-1 bg-navy-600 hover:bg-navy-500 rounded-md text-black font-medium transition"
+              >
+                Retry
+              </button>
+            </>
+          )}
+        </div>
+
         <div className="flex-1 overflow-y-auto bg-navy-700 py-4">
-          <ReceiptFrame html={html} widthMm={getThermalPaperWidthMm(items.length)} />
+          <ReceiptFrame html={html} widthMm={widthMm} />
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 py-3 bg-navy-800 border-t border-navy-600/30">

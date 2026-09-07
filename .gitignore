@@ -26,3 +26,7 @@ dist-ssr
 
 # local data dump, do not commit
 scripts/export.json
+
+# QZ signing: the certificate is public and tracked; a private key never is.
+qz-signing/*.pem
+qz-signing/*private*

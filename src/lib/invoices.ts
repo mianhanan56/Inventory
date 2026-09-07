@@ -1,5 +1,4 @@
 import { Sale, SaleItem } from "../types";
-import { notifyError } from "./errors";
 import { LOGO_DATA_URI } from "./logo";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -130,25 +129,25 @@ export const PAPER_WIDTH_MM = WIDE_PAPER_WIDTH_MM;
 /**
  * Clear paper down each side, as page padding inside the page.
  *
- * At 4mm on an 80mm page this holds the ink to the middle 72mm, which is the
- * span of the head on a standard 80mm unit, so nothing sits in the strip under
- * the paper guides where a printer cannot lay ink down.
+ * The head of an 80mm unit spans 576 dots at 8 dots/mm = 72mm, centred on
+ * ~79.5mm of paper, so ~4mm down each side has no dots at all. At 4mm the ink
+ * band is exactly that 72mm: every dot the layout asks for is a dot the head
+ * has. Measured on 80mm paper:
  *
- * It is 1mm, so the ink band is 78mm on the 80mm page and 98mm on the 100mm one
- * (the latter shrunk to 78.4mm by the driver). Neither is 72mm, so BOTH pages
- * put ink outside what the head can reach. Measured on 80mm paper:
- *
- *              at 1mm                     at 4mm
+ *              at 1-2mm                   at 4mm
  *   <=15 items 3.3mm lost each side       0 - ink lands on 4.0mm..76.0mm, the
  *                                         head's dots exactly
  *   >15 items  3.3mm lost each side       1.2mm lost each side
  *
- * So 4mm is strictly better on both, and exact on the narrow page. It is left at
- * 1mm because only the item-count condition was asked for; this is the number to
- * change if the printed slips come back with the cents or the first letters of
- * descriptions missing.
+ * It was dropped to 1mm, then 2mm, while the wide-page rule was being tuned -
+ * chasing characters per line on the page that gets shrunk anyway. That cost
+ * the cents off every line total and the first letters off every description,
+ * on BOTH pages. It is back at the measured value.
+ *
+ * This is the number to change if printed slips ever come back with the cents
+ * or the first letters of descriptions missing.
  */
-export const SIDE_MARGIN_MM = 2;
+export const SIDE_MARGIN_MM = 4;
 
 /** Page width used until setThermalPaperWidthMm() says otherwise. */
 export const DEFAULT_PAPER_WIDTH_MM = PAPER_WIDTH_MM;
@@ -330,28 +329,33 @@ const PAGE_TAIL_MM = 2;
    Page length in mm for a receipt of 1..30 items, indexed by item count
    (index 0 holds the no-items length).
 
-   The series starts at 60mm for one item and continues at 5.20mm an item, which
-   is the measured height of a single-line row in this layout. 60mm was asked for
-   directly, and it is BELOW what a receipt of one item actually renders to - the
-   shortest possible one-item slip is ~95mm of content and the client's own names
-   put it at ~102mm.
+   THIS TABLE IS A SAFETY FLOOR, NOT A LENGTH. It only decides a page when the
+   measurement is unavailable - a script that ran before layout, an .invoice that
+   measured zero. Everywhere else the page is max(this, rendered content), and
+   the content is taller at every item count, so the content decides.
 
-   WHICH MEANS THIS TABLE NO LONGER DECIDES ANY PRINTED LENGTH. The page is
-   max(this, rendered content), and the content is larger at every item count from
-   1 to 30, so the content decides all of them. That is not a fault - the content
-   height is the tightest length a receipt can have without clipping, and it is
-   what these slips now print at:
+   Which is exactly why the numbers have to stay ABOVE nothing and BELOW the
+   real content: a floor under the content is a slip with a blank tail on the
+   rare failure, and a floor over it would add blank paper to every sale. A
+   floor that is too SHORT is the one unacceptable option, because it clips - a
+   receipt whose totals were cut off the bottom is worse than a long one.
 
-     1 item    ~102mm        15 items  ~235mm
-     5 items   ~140mm        30 items  ~374mm
-                             (client's own product names)
+   The series is the measured ONE-LINE height: 102mm for a no-item slip
+   (logo, header, table head, totals, returns policy) and 6.24mm an item, which
+   is a single-line row in this layout. That is the least a given item count can
+   possibly need, so it can never over-feed.
 
-   What the table still does is catch the case where the measurement is
-   unavailable - a script that ran before layout, an .invoice that measured zero.
-   At 60mm-and-up that fallback is now SHORTER than the receipt, so a measurement
-   failure clips rather than over-feeds. It was a measured one-line floor before
-   (95mm for one item, 245mm for thirty), which is the shape to restore if a
-   clipped receipt is ever reported with no other explanation.
+   It was briefly lowered to a 60mm series while the item-count width rule was
+   being tuned, which put the floor UNDER the content at every count from 1 to
+   30 - a measurement failure would then have clipped the slip rather than
+   over-fed it. Restored.
+
+   For reading against real slips, what the content actually renders to at 80mm
+   with 4mm side margins (measured, client-style names):
+
+     1 item    104mm        16 items  248mm
+     3 items   121mm        30 items  385mm
+     15 items  241mm        30 items, longest names  715mm
 
    To make the SLIPS shorter, this table is the wrong lever - lowering it does
    nothing while the content is taller. PAPER AVAILABLE FROM SPACING above is the
@@ -360,20 +364,20 @@ const PAGE_TAIL_MM = 2;
    The series, for reading against the printed slips:
 
      items    page      items    page
-      1-2      60-66    13-15    123-133
-      3-5      71-81    16-20    138-159
-      6-8      86-97    21-25    164-185
-      9-12    102-118   26-30    190-211
+      1-2     108-115   13-15    183-196
+      3-5     121-133   16-20    202-227
+      6-8     140-152   21-25    233-258
+      9-12    158-177   26-30    264-289
    ────────────────────────────────────────────────────────────────────────── */
 
 const RECEIPT_PAGE_LENGTH_MM: readonly number[] = [
-  /*  0 */ 55,
-  /*  1 */ 60, /*  2 */ 66, /*  3 */ 71, /*  4 */ 76, /*  5 */ 81,
-  /*  6 */ 86, /*  7 */ 92, /*  8 */ 97, /*  9 */ 102, /* 10 */ 107,
-  /* 11 */ 112, /* 12 */ 118, /* 13 */ 123, /* 14 */ 128, /* 15 */ 133,
-  /* 16 */ 138, /* 17 */ 144, /* 18 */ 149, /* 19 */ 154, /* 20 */ 159,
-  /* 21 */ 164, /* 22 */ 170, /* 23 */ 175, /* 24 */ 180, /* 25 */ 185,
-  /* 26 */ 190, /* 27 */ 196, /* 28 */ 201, /* 29 */ 206, /* 30 */ 211,
+  /*  0 */ 102,
+  /*  1 */ 108, /*  2 */ 115, /*  3 */ 121, /*  4 */ 127, /*  5 */ 133,
+  /*  6 */ 140, /*  7 */ 146, /*  8 */ 152, /*  9 */ 158, /* 10 */ 165,
+  /* 11 */ 171, /* 12 */ 177, /* 13 */ 183, /* 14 */ 190, /* 15 */ 196,
+  /* 16 */ 202, /* 17 */ 208, /* 18 */ 214, /* 19 */ 221, /* 20 */ 227,
+  /* 21 */ 233, /* 22 */ 239, /* 23 */ 246, /* 24 */ 252, /* 25 */ 258,
+  /* 26 */ 264, /* 27 */ 271, /* 28 */ 277, /* 29 */ 283, /* 30 */ 289,
 ];
 
 /** Highest item count the table covers. */
@@ -2020,42 +2024,10 @@ export function describePrintError(
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   PRINT WITH ALERT
+   Printing is entered through printSaleReceipt() in printReceipt.ts, which
+   tries the thermal route first and falls back to printInvoice() above only
+   when QZ Tray is unreachable. There is deliberately no print-and-toast
+   wrapper here any more: the one that used to live at the bottom of this file
+   took the browser route every time, so every caller of it silently skipped
+   the printer.
    ══════════════════════════════════════════════════════════════════════════ */
-
-export async function printInvoiceWithAlert(
-  sale: Sale,
-  items: SaleItem[],
-): Promise<boolean> {
-
-  try {
-
-    await printInvoice(
-      sale,
-      items,
-    );
-
-
-    return true;
-
-  } catch (err) {
-
-    console.error(
-      `Could not print invoice ${sale.invoice_number}`,
-      err,
-    );
-
-
-    notifyError(
-
-      `Could not print invoice ${sale.invoice_number}`,
-
-      describePrintError(
-        err,
-      ),
-    );
-
-
-    return false;
-  }
-}
