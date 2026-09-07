@@ -13,6 +13,17 @@ import { notifyError } from '../../lib/errors';
 import { useThermalPrinter } from '../../hooks/useThermalPrinter';
 import { useToast } from '../ui/Toast';
 
+/**
+ * One-click printer setup, served from this app's own origin.
+ *
+ * The file lives in public/ so it deploys with the build - Vercel serves a real
+ * file before it applies the SPA rewrite in vercel.json, so this is a download
+ * and not index.html. Sending it by mail or WhatsApp is not an option: both
+ * strip .bat attachments, and telling a shop to rename a .txt back is how a
+ * setup goes wrong.
+ */
+const SETUP_SCRIPT_URL = '/Setup-OnTarget-Printer.bat';
+
 /** Height used until the receipt has been measured. */
 const INITIAL_PREVIEW_HEIGHT_PX = 640;
 
@@ -245,12 +256,31 @@ export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePre
                 QZ Tray is not running — this slip will print through the browser dialog, at
                 whatever length the printer driver decides.
               </span>
-              <button
-                onClick={() => void thermal.refresh()}
-                className="shrink-0 px-2 py-1 bg-navy-600 hover:bg-navy-500 rounded-md text-black font-medium transition"
-              >
-                Retry
-              </button>
+              <span className="flex shrink-0 items-center gap-2">
+                {/*
+                  The setup script, downloaded from the till that needs it.
+
+                  It carries the certificate inside it, creates the folder,
+                  edits QZ Tray's properties and restarts it - so the operator
+                  never has to copy a certificate by hand or be sent a file
+                  that a mail provider will strip. Chrome asks them to keep a
+                  .bat once; that is the whole of the friction.
+                */}
+                <a
+                  href={SETUP_SCRIPT_URL}
+                  download
+                  className="px-2 py-1 bg-navy-600 hover:bg-navy-500 rounded-md text-black font-medium transition"
+                  title="Downloads the printer setup file. Right-click it and choose Run as administrator."
+                >
+                  Set up printer
+                </a>
+                <button
+                  onClick={() => void thermal.refresh()}
+                  className="px-2 py-1 bg-navy-600 hover:bg-navy-500 rounded-md text-black font-medium transition"
+                >
+                  Retry
+                </button>
+              </span>
             </>
           )}
         </div>
