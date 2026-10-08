@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, Printer, X } from 'lucide-react';
 import { Sale, SaleItem } from '../../types';
+import formatCurrency from '../../lib/format';
 import {
   generateInvoiceHTML,
   getThermalPaperWidthMm,
@@ -133,8 +134,7 @@ export default function InvoicePreviewModal({ sale, items, onClose }: InvoicePre
     };
   }, []);
 
-  const fmt = (v: number) =>
-    `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = formatCurrency;
 
   const lineCount = items.length;
   const unitCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);

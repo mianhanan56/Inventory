@@ -18,6 +18,7 @@ import {
   Clock,
   Printer,
 } from 'lucide-react';
+import formatCurrency from '../../lib/format';
 import {
   AreaChart,
   Area,
@@ -182,7 +183,7 @@ export default function Dashboard() {
 
   const PIE_COLORS = ['#10b981', '#374151', '#9ca3af', '#059669', '#d1d5db'];
 
-  const formatCurrency = (val: number) => `R ${val.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+  const formatCurrencyLocal = formatCurrency;
 
   if (loading) {
     return (
@@ -289,7 +290,7 @@ export default function Dashboard() {
                 <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(v) => `R${v}`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', color: '#171717' }}
-                  formatter={(value: unknown) => [`R ${Number(value).toLocaleString('en-ZA')}`, 'Revenue']}
+                  formatter={(value: unknown) => [formatCurrency(Number(value)), 'Revenue']}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revenueGradient)" strokeWidth={2} />
               </AreaChart>

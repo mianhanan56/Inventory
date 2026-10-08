@@ -9,8 +9,8 @@ import {
   Check, Sparkles, Plus,
 } from 'lucide-react';
 
-const fmt = (v: number) =>
-  `R ${Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import formatCurrency from '../../lib/format';
+const fmt = formatCurrency;
 
 interface Props {
   customer: Customer;

@@ -8,6 +8,7 @@ import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
 import InvoicePreviewModal from '../invoices/InvoicePreviewModal';
 import { useToast } from '../ui/Toast';
+import formatCurrency from '../../lib/format';
 import { reportError } from '../../lib/errors';
 import {
   Search, ShoppingCart, Plus, Minus, CreditCard,
@@ -52,7 +53,17 @@ export default function Sales() {
       supabase.from('customers').select('*').eq('is_active', true).order('name'),
       supabase.from('sales').select('*, customer:customers(*)').order('created_at', { ascending: false }).limit(50),
     ]);
-    const freshProducts = prodRes.data || [];
+    const rawProducts = prodRes.data || [];
+    // Coerce numeric DB fields (Supabase returns NUMERIC as strings) to numbers
+    const freshProducts = rawProducts.map(p => ({
+      ...p,
+      selling_price: Number(p.selling_price),
+      cost_price: Number(p.cost_price),
+      current_stock: Number(p.current_stock),
+      min_stock_level: Number(p.min_stock_level),
+      max_stock_level: p.max_stock_level == null ? undefined : Number(p.max_stock_level),
+      vat_rate: Number(p.vat_rate),
+    }));
     setProducts(freshProducts);
     setCustomers(custRes.data || []);
     setSales(salesRes.data || []);
@@ -158,10 +169,24 @@ export default function Sales() {
     return Math.max(0, (item.product.selling_price - item.unit_price) * item.quantity);
   }
 
-  function updateItemPrice(productId: string, unit_price: number) {
+  async function updateItemPrice(productId: string, unit_price: number) {
+    // Optimistic UI: update cart immediately
     setCart(cart.map(item =>
       item.product.id === productId ? { ...item, unit_price } : item
     ));
+
+    try {
+      // Persist the edited unit price as the product's selling_price (price point)
+      const { error } = await supabase.from('products').update({ selling_price: unit_price }).eq('id', productId);
+      if (error) throw error;
+
+      // Reflect the change in local products snapshot so future adds use the new price
+      setProducts(prev => prev.map(p => p.id === productId ? { ...p, selling_price: unit_price } : p));
+    } catch (err) {
+      reportError('Could not update product price', err);
+      // Reload products to ensure UI consistency
+      await loadData();
+    }
   }
 
   // A line can never exceed the stock on the product snapshot it holds. This is
@@ -347,7 +372,7 @@ export default function Sales() {
     (p.barcode && p.barcode.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = formatCurrency;
 
   // Whether a product is already in the cart — drives the card's active state.
   const isInCart = (productId: string) => cart.some(item => item.product.id === productId);

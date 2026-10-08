@@ -1,5 +1,6 @@
 import { Sale, SaleItem } from "../types";
 import { LOGO_DATA_URI } from "./logo";
+import formatCurrency from './format';
 
 /* ══════════════════════════════════════════════════════════════════════════
    THERMAL RECEIPT PRINTING
@@ -747,11 +748,9 @@ export function generateInvoiceHTML(
   pageLengthMm: number = getThermalPageLengthMm(items.length),
 ) {
 
-  const fmt = (v: number) =>
-    `R ${v.toLocaleString("en-ZA", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+  const fmt = formatCurrency;
+
+  const customerName = (sale as any).customer?.name || 'Walk-in Customer';
 
 
   const stamp =
@@ -1331,6 +1330,13 @@ export function generateInvoiceHTML(
 
       </div>
 
+    </div>
+
+    <!-- CUSTOMER -->
+
+    <div style="text-align:center; margin-top:8px; margin-bottom:8px;">
+      <strong style="display:block; font-size:14px;">${customerName}</strong>
+      <div style="font-size:11px; color:#000;">${sale.customer_id ? 'Registered Customer' : 'Walk-in'}</div>
     </div>
 
 

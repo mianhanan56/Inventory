@@ -4,6 +4,7 @@ import { Product, Category, Supplier } from '../../types';
 import { formatError, reportError } from '../../lib/errors';
 import { fetchAllRows } from '../../lib/fetchAll';
 import GlassCard from '../ui/GlassCard';
+import formatCurrency from '../../lib/format';
 import Modal from '../ui/Modal';
 import StatusBadge from '../ui/StatusBadge';
 import { useToast } from '../ui/Toast';
@@ -221,7 +222,7 @@ export default function Products() {
     return matchesSearch && matchesCat && matchesStock;
   });
 
-  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+  const fmt = formatCurrency;
 
   return (
     <div className="space-y-6">

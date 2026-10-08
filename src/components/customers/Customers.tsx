@@ -7,6 +7,7 @@ import GlassCard from '../ui/GlassCard';
 import Modal from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import CustomerHistoryPanel from './CustomerHistoryPanel';
+import formatCurrency from '../../lib/format';
 import { Plus, Search, Edit2, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Receipt } from 'lucide-react';
 
 interface CustomerStats {
@@ -66,7 +67,7 @@ export default function Customers() {
     setLoading(false);
   }
 
-  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = formatCurrency;
 
   function openCreate() {
     setEditCustomer(null);

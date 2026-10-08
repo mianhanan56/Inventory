@@ -10,6 +10,7 @@ import Modal from '../ui/Modal';
 import { useToast } from '../ui/Toast';
 import InvoicePreviewModal from './InvoicePreviewModal';
 import { Search, FileText, Printer, Plus } from 'lucide-react';
+import formatCurrency from '../../lib/format';
 
 interface ManualInvoice {
   id: string;
@@ -198,7 +199,7 @@ export default function Invoices() {
     m.product_name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const fmt = (v: number) => `R ${v.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+  const fmt = formatCurrency;
 
   return (
     <div className="space-y-6">
