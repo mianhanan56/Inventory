@@ -195,16 +195,25 @@ export default function Sales() {
   // guard only — the authoritative check is the products.current_stock >= 0
   // constraint, which aborts the sale server-side if the snapshot was stale.
   function updateQuantity(productId: string, qty: number) {
-    if (qty <= 0) { removeFromCart(productId); return; }
-    setCart(cart.map(item =>
-      item.product.id === productId
-        ? { ...item, quantity: Math.min(qty, item.product.current_stock) }
-        : item
-    ));
+    setCart(prev => {
+      const item = prev.find(entry => entry.product.id === productId);
+      if (!item) return prev;
+
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return prev.filter(entry => entry.product.id !== productId);
+      }
+
+      const nextQty = Math.min(Math.max(Math.round(qty), 1), MAX_CART_QUANTITY);
+      return prev.map(entry =>
+        entry.product.id === productId
+          ? { ...entry, quantity: nextQty }
+          : entry
+      );
+    });
   }
 
   function removeFromCart(productId: string) {
-    setCart(cart.filter(item => item.product.id !== productId));
+    setCart(prev => prev.filter(item => item.product.id !== productId));
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
@@ -373,6 +382,7 @@ export default function Sales() {
   );
 
   const fmt = formatCurrency;
+  const MAX_CART_QUANTITY = 700;
 
   // Whether a product is already in the cart — drives the card's active state.
   const isInCart = (productId: string) => cart.some(item => item.product.id === productId);
@@ -534,18 +544,29 @@ export default function Sales() {
                         <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="w-7 h-7 bg-navy-600 rounded-lg flex items-center justify-center text-black hover:bg-navy-500 transition">
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-black font-medium text-sm w-8 text-center">{item.quantity}</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={MAX_CART_QUANTITY}
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const nextValue = Number(e.target.value);
+                            if (!Number.isNaN(nextValue)) {
+                              updateQuantity(item.product.id, nextValue);
+                            }
+                          }}
+                          className="text-black font-medium text-sm w-12 text-center bg-navy-700/50 border border-navy-600/30 rounded-lg px-1 py-1 focus:outline-none focus:border-gold-500/50"
+                          aria-label={`Quantity for ${item.product.name}`}
+                        />
                         <button
                           onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          disabled={item.quantity >= item.product.current_stock}
-                          title={item.quantity >= item.product.current_stock ? `Only ${item.product.current_stock} in stock` : undefined}
+                          disabled={item.quantity >= MAX_CART_QUANTITY}
+                          title={item.quantity >= MAX_CART_QUANTITY ? `Maximum quantity is ${MAX_CART_QUANTITY}` : undefined}
                           className="w-7 h-7 bg-navy-600 rounded-lg flex items-center justify-center text-black hover:bg-navy-500 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-navy-600"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
-                        {item.quantity >= item.product.current_stock && (
-                          <span className="text-navy-400 text-xs">max ({item.product.current_stock})</span>
-                        )}
+                        <span className="text-navy-400 text-xs">max ({MAX_CART_QUANTITY})</span>
                       </div>
                       <span className="text-gold-400 font-semibold text-sm">
                         {fmt(item.unit_price * item.quantity)}
