@@ -169,24 +169,13 @@ export default function Sales() {
     return Math.max(0, (item.product.selling_price - item.unit_price) * item.quantity);
   }
 
-  async function updateItemPrice(productId: string, unit_price: number) {
-    // Optimistic UI: update cart immediately
+  // An edited price applies to this sale only. It must not be written back to
+  // products.selling_price: a discount for one customer is not a new shelf
+  // price, and itemDiscountAmount() relies on selling_price staying put.
+  function updateItemPrice(productId: string, unit_price: number) {
     setCart(cart.map(item =>
       item.product.id === productId ? { ...item, unit_price } : item
     ));
-
-    try {
-      // Persist the edited unit price as the product's selling_price (price point)
-      const { error } = await supabase.from('products').update({ selling_price: unit_price }).eq('id', productId);
-      if (error) throw error;
-
-      // Reflect the change in local products snapshot so future adds use the new price
-      setProducts(prev => prev.map(p => p.id === productId ? { ...p, selling_price: unit_price } : p));
-    } catch (err) {
-      reportError('Could not update product price', err);
-      // Reload products to ensure UI consistency
-      await loadData();
-    }
   }
 
   // A line can never exceed the stock on the product snapshot it holds. This is
