@@ -199,11 +199,15 @@ export default function Sales() {
       const item = prev.find(entry => entry.product.id === productId);
       if (!item) return prev;
 
-      if (!Number.isFinite(qty) || qty <= 0) {
+      if (!Number.isFinite(qty)) {
+        return prev;
+      }
+
+      if (qty <= 0) {
         return prev.filter(entry => entry.product.id !== productId);
       }
 
-      const nextQty = Math.min(Math.max(Math.round(qty), 1), MAX_CART_QUANTITY);
+      const nextQty = Math.max(Math.round(qty), 1);
       return prev.map(entry =>
         entry.product.id === productId
           ? { ...entry, quantity: nextQty }
@@ -382,7 +386,6 @@ export default function Sales() {
   );
 
   const fmt = formatCurrency;
-  const MAX_CART_QUANTITY = 700;
 
   // Whether a product is already in the cart — drives the card's active state.
   const isInCart = (productId: string) => cart.some(item => item.product.id === productId);
@@ -547,10 +550,12 @@ export default function Sales() {
                         <input
                           type="number"
                           min={1}
-                          max={MAX_CART_QUANTITY}
                           value={item.quantity}
                           onChange={(e) => {
-                            const nextValue = Number(e.target.value);
+                            const rawValue = e.target.value;
+                            if (rawValue === '') return;
+
+                            const nextValue = Number(rawValue);
                             if (!Number.isNaN(nextValue)) {
                               updateQuantity(item.product.id, nextValue);
                             }
@@ -560,13 +565,10 @@ export default function Sales() {
                         />
                         <button
                           onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          disabled={item.quantity >= MAX_CART_QUANTITY}
-                          title={item.quantity >= MAX_CART_QUANTITY ? `Maximum quantity is ${MAX_CART_QUANTITY}` : undefined}
-                          className="w-7 h-7 bg-navy-600 rounded-lg flex items-center justify-center text-black hover:bg-navy-500 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-navy-600"
+                          className="w-7 h-7 bg-navy-600 rounded-lg flex items-center justify-center text-black hover:bg-navy-500 transition"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
-                        <span className="text-navy-400 text-xs">max ({MAX_CART_QUANTITY})</span>
                       </div>
                       <span className="text-gold-400 font-semibold text-sm">
                         {fmt(item.unit_price * item.quantity)}
